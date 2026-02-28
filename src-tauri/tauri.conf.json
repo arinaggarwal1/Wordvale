@@ -1,0 +1,90 @@
+{
+    "build": {
+        "beforeBuildCommand": "npm run build",
+        "beforeDevCommand": "npm run dev",
+        "devPath": "http://localhost:1420",
+        "distDir": "../dist"
+    },
+    "package": {
+        "productName": "Wordvale",
+        "version": "1.0.0"
+    },
+    "tauri": {
+        "allowlist": {
+            "all": false,
+            "shell": {
+                "all": false,
+                "open": true,
+                "execute": true,
+                "sidecar": true,
+                "scope": [
+                    {
+                        "name": "bash",
+                        "cmd": "bash",
+                        "args": true
+                    }
+                ]
+            },
+            "dialog": {
+                "all": true
+            },
+            "fs": {
+                "all": true,
+                "scope": [
+                    "**"
+                ]
+            },
+            "path": {
+                "all": true
+            },
+            "process": {
+                "all": true
+            },
+            "window": {
+                "all": true
+            }
+        },
+        "bundle": {
+            "active": true,
+            "targets": "all",
+            "identifier": "com.wordvale.app",
+            "icon": [
+                "icons/32x32.png",
+                "icons/128x128.png",
+                "icons/128x128@2x.png",
+                "icons/icon.icns",
+                "icons/icon.ico"
+            ],
+            "macOS": {
+                "frameworks": [],
+                "minimumSystemVersion": "10.15",
+                "exceptionDomain": "",
+                "signingIdentity": null,
+                "entitlements": null
+            },
+            "externalBin": [
+                "binaries/whisper-backend"
+            ],
+            "resources": [
+                "../backend/bundle_resources"
+            ]
+        },
+        "security": {
+            "csp": null
+        },
+        "windows": [
+            {
+                "title": "Wordvale",
+                "width": 1400,
+                "height": 900,
+                "minWidth": 1100,
+                "minHeight": 700,
+                "resizable": true,
+                "fullscreen": false,
+                "decorations": true,
+                "transparent": false,
+                "center": true
+            }
+        ]
+    }
+}

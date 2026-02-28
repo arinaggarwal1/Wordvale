@@ -1,0 +1,245 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Custom Properties ─── */
+:root {
+  --app-bg: #020617;
+  --surface-primary: #0f172a;
+  --surface-secondary: #1e293b;
+  --surface-tertiary: #334155;
+  --border-subtle: rgba(148, 163, 184, 0.1);
+  --border-default: rgba(148, 163, 184, 0.15);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --success: #22c55e;
+  --warning: #eab308;
+  --danger: #ef4444;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Global Styles ─── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+/* ─── Custom Component Classes ─── */
+@layer components {
+  .card {
+    @apply rounded-xl border border-surface-800/50 bg-surface-900/80 backdrop-blur-sm;
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-elevated {
+    @apply rounded-xl border border-surface-700/30 bg-surface-900/90 backdrop-blur-sm;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent-500 px-4 py-2.5
+           font-medium text-white transition-all duration-200
+           hover:bg-accent-600 hover:shadow-lg
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent-500;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-surface-700
+           bg-surface-800/60 px-4 py-2.5 font-medium text-surface-200
+           transition-all duration-200
+           hover:bg-surface-700/80 hover:border-surface-600
+           active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2
+           text-surface-400 transition-all duration-200
+           hover:bg-surface-800/60 hover:text-surface-200;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-surface-700/50 bg-surface-800/60
+           px-3 py-2 text-sm text-surface-100 placeholder-surface-500
+           outline-none transition-all duration-200
+           focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/20;
+  }
+
+  .select-trigger {
+    @apply flex items-center justify-between w-full rounded-lg border border-surface-700/50
+           bg-surface-800/60 px-3 py-2.5 text-sm text-surface-100
+           outline-none transition-all duration-200 cursor-pointer
+           hover:border-surface-600 focus:border-accent-500/50;
+  }
+
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wider text-surface-400 mb-1.5;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .glass {
+    @apply bg-surface-900/60 backdrop-blur-md border border-white/5;
+  }
+}
+
+/* ─── Progress Bar Animation ─── */
+.progress-bar {
+  background: linear-gradient(
+    90deg,
+    var(--accent-primary) 0%,
+    #6366f1 50%,
+    var(--accent-primary) 100%
+  );
+  background-size: 200% 100%;
+  animation: progressShimmer 2s ease-in-out infinite;
+}
+
+@keyframes progressShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Drag & Drop Pulse ─── */
+.drop-zone-active {
+  animation: dropPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dropPulse {
+  0%, 100% {
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.15);
+  }
+}
+
+/* ─── Skeleton Loading ─── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-secondary) 25%,
+    var(--surface-tertiary) 50%,
+    var(--surface-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Radix UI Overrides ─── */
+[data-radix-popper-content-wrapper] {
+  z-index: 50 !important;
+}
+
+/* Select content */
+.SelectContent {
+  @apply overflow-hidden rounded-xl border border-surface-700/50 bg-surface-850 shadow-xl;
+  animation: slideDown 0.15s ease-out;
+}
+
+.SelectItem {
+  @apply relative flex items-center rounded-lg px-3 py-2 text-sm text-surface-200 outline-none
+         cursor-pointer select-none;
+}
+
+.SelectItem[data-highlighted] {
+  @apply bg-accent-500/10 text-accent-300;
+}
+
+/* Toast */
+.ToastRoot {
+  @apply rounded-xl border border-surface-700/30 bg-surface-850/95 backdrop-blur-md p-4 shadow-xl;
+  animation: slideRight 0.3s ease-out;
+}
+
+/* Tabs */
+.TabsTrigger {
+  @apply px-4 py-2 text-sm font-medium text-surface-400 transition-all duration-200
+         border-b-2 border-transparent;
+}
+
+.TabsTrigger[data-state="active"] {
+  @apply text-accent-400 border-accent-400;
+}
+
+/* Collapsible */
+.CollapsibleContent {
+  overflow: hidden;
+}
+
+.CollapsibleContent[data-state="open"] {
+  animation: slideDown 0.2s ease-out;
+}
+
+.CollapsibleContent[data-state="closed"] {
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
