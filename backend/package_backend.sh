@@ -31,30 +31,26 @@ if ! command -v rustc >/dev/null 2>&1; then
     exit 1
 fi
 
+VENDORED_RUNTIME_DIR="$SCRIPT_DIR/runtime/macos-arm64"
 LEGACY_WHISPER_CLI_SRC="$SCRIPT_DIR/whisper.cpp/build/bin/whisper-cli"
 EXISTING_RESOURCE_CLI_SRC="$SCRIPT_DIR/bundle_resources/whisper-cli"
+VENDORED_RUNTIME_CLI_SRC="$VENDORED_RUNTIME_DIR/whisper-cli"
 
-WHISPER_CLI_SRC=""
-if [ -x "$LEGACY_WHISPER_CLI_SRC" ]; then
-    WHISPER_CLI_SRC="$LEGACY_WHISPER_CLI_SRC"
+RUNTIME_SOURCE_DIR=""
+if [ -x "$VENDORED_RUNTIME_CLI_SRC" ]; then
+    RUNTIME_SOURCE_DIR="$VENDORED_RUNTIME_DIR"
+elif [ -x "$LEGACY_WHISPER_CLI_SRC" ]; then
+    RUNTIME_SOURCE_DIR="$SCRIPT_DIR/whisper.cpp/build"
 elif [ -x "$EXISTING_RESOURCE_CLI_SRC" ]; then
-    WHISPER_CLI_SRC="$EXISTING_RESOURCE_CLI_SRC"
+    RUNTIME_SOURCE_DIR="$SCRIPT_DIR/bundle_resources"
 else
     echo "Could not find whisper-cli."
     echo "Looked in:"
+    echo "  - $VENDORED_RUNTIME_CLI_SRC"
     echo "  - $LEGACY_WHISPER_CLI_SRC"
     echo "  - $EXISTING_RESOURCE_CLI_SRC"
-    echo "Build or place whisper-cli into backend/bundle_resources before packaging."
+    echo "Provide a runtime in backend/runtime/macos-arm64 or backend/bundle_resources before packaging."
     exit 1
-fi
-
-LEGACY_METAL_SRC="$SCRIPT_DIR/whisper.cpp/ggml/src/ggml-metal/ggml-metal.metal"
-EXISTING_RESOURCE_METAL_SRC="$SCRIPT_DIR/bundle_resources/ggml-metal.metal"
-METAL_SRC=""
-if [ -f "$LEGACY_METAL_SRC" ]; then
-    METAL_SRC="$LEGACY_METAL_SRC"
-elif [ -f "$EXISTING_RESOURCE_METAL_SRC" ]; then
-    METAL_SRC="$EXISTING_RESOURCE_METAL_SRC"
 fi
 
 TARGET_TRIPLE="$(rustc -vV | awk '/host:/ {print $2}')"
@@ -78,16 +74,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ "$WHISPER_CLI_SRC" = "$EXISTING_RESOURCE_CLI_SRC" ] || { [ -n "$METAL_SRC" ] && [ "$METAL_SRC" = "$EXISTING_RESOURCE_METAL_SRC" ]; }; then
+if [ "$RUNTIME_SOURCE_DIR" = "$SCRIPT_DIR/bundle_resources" ]; then
     STAGED_RUNTIME_DIR="$(mktemp -d)"
-    if [ "$WHISPER_CLI_SRC" = "$EXISTING_RESOURCE_CLI_SRC" ]; then
-        cp "$EXISTING_RESOURCE_CLI_SRC" "$STAGED_RUNTIME_DIR/whisper-cli"
-        WHISPER_CLI_SRC="$STAGED_RUNTIME_DIR/whisper-cli"
-    fi
-    if [ -n "$METAL_SRC" ] && [ "$METAL_SRC" = "$EXISTING_RESOURCE_METAL_SRC" ]; then
-        cp "$EXISTING_RESOURCE_METAL_SRC" "$STAGED_RUNTIME_DIR/ggml-metal.metal"
-        METAL_SRC="$STAGED_RUNTIME_DIR/ggml-metal.metal"
-    fi
+    cp -R "$SCRIPT_DIR/bundle_resources/." "$STAGED_RUNTIME_DIR/"
+    RUNTIME_SOURCE_DIR="$STAGED_RUNTIME_DIR"
 fi
 
 echo "Cleaning old backend packaging artifacts..."
@@ -110,10 +100,15 @@ echo "Staging sidecar binary at $DEST_BINARY..."
 mv "$DIST_DIR/whisper-backend" "$DEST_BINARY"
 
 echo "Staging minimal runtime resources..."
-cp "$WHISPER_CLI_SRC" "$RESOURCE_DIR/whisper-cli"
-
-if [ -f "$METAL_SRC" ]; then
-    cp "$METAL_SRC" "$RESOURCE_DIR/ggml-metal.metal"
+if [ "$RUNTIME_SOURCE_DIR" = "$SCRIPT_DIR/whisper.cpp/build" ]; then
+    cp "$LEGACY_WHISPER_CLI_SRC" "$RESOURCE_DIR/whisper-cli"
+    find "$SCRIPT_DIR/whisper.cpp/build" -type f \( -name 'libwhisper*.dylib' -o -name 'libggml*.dylib' \) -exec cp {} "$RESOURCE_DIR/" \;
+    LEGACY_METAL_SRC="$SCRIPT_DIR/whisper.cpp/ggml/src/ggml-metal/ggml-metal.metal"
+    if [ -f "$LEGACY_METAL_SRC" ]; then
+        cp "$LEGACY_METAL_SRC" "$RESOURCE_DIR/ggml-metal.metal"
+    fi
+else
+    cp -R "$RUNTIME_SOURCE_DIR/." "$RESOURCE_DIR/"
 fi
 
 if find "$RESOURCE_DIR" -type f \( -name 'ggml-*.bin' -o -name '*.gguf' \) | grep -q .; then

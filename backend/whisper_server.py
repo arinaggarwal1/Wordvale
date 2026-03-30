@@ -67,6 +67,7 @@ else:
     # Running as script
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     _dev_candidates = [
+        os.path.join(SCRIPT_DIR, "runtime", "macos-arm64", "whisper-cli"),
         os.path.join(SCRIPT_DIR, "bundle_resources", "whisper-cli"),
         os.path.join(SCRIPT_DIR, "whisper.cpp", "build", "bin", "whisper-cli"),
     ]
