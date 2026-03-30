@@ -8,7 +8,7 @@
  * Registers keyboard shortcuts and wires up the useWhisper hook.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
     AudioWaveform,
     Play,
@@ -30,10 +30,15 @@ import TranscriptionPanel from "./components/TranscriptionPanel";
 import AdvancedSettingsPanel from "./components/AdvancedSettingsPanel";
 import QueuePanel from "./components/QueuePanel";
 import ExportPanel from "./components/ExportPanel";
-import BackendDebugPanel from "./components/BackendDebugPanel";
 import ModelManagerPanel from "./components/ModelManagerPanel";
 
+const BackendDebugPanel = import.meta.env.DEV
+    ? lazy(() => import("./components/BackendDebugPanel"))
+    : null;
+
 export default function App() {
+    const showBackendDebugPanel = import.meta.env.DEV && BackendDebugPanel !== null;
+
     const {
         isBackendReady,
         isModelLoading,
@@ -372,12 +377,16 @@ export default function App() {
                         onDeleteAllModels={deleteAllModels}
                     />
 
-                    <BackendDebugPanel
-                        logs={backendLogs}
-                        isBackendReady={isBackendReady}
-                        isUsingMockBackend={isUsingMockBackend}
-                        error={error}
-                    />
+                    {showBackendDebugPanel && BackendDebugPanel && (
+                        <Suspense fallback={null}>
+                            <BackendDebugPanel
+                                logs={backendLogs}
+                                isBackendReady={isBackendReady}
+                                isUsingMockBackend={isUsingMockBackend}
+                                error={error}
+                            />
+                        </Suspense>
+                    )}
                 </aside>
             </div>
 
