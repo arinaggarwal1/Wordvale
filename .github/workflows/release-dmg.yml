@@ -1,0 +1,101 @@
+name: Release DMG
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ensure Rust toolchain is available
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+          rustup default stable
+          rustc -V
+          cargo -V
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Create backend virtual environment
+        run: python3 -m venv backend/venv
+
+      - name: Build DMG
+        run: npm run dist:mac
+
+      - name: Locate DMG
+        id: dmg
+        shell: bash
+        run: |
+          set -euo pipefail
+          DMG_PATH="$(find "$GITHUB_WORKSPACE/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' | head -n 1)"
+          if [ -z "$DMG_PATH" ]; then
+            echo "No DMG was produced."
+            exit 1
+          fi
+
+          echo "path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$DMG_PATH")" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_NAME="auto-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          RELEASE_NAME="Automated Release ${GITHUB_RUN_NUMBER}"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload DMG as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordvale-dmg
+          path: ${{ steps.dmg.outputs.path }}
+
+      - name: Publish DMG to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+          RELEASE_NAME: ${{ steps.release.outputs.name }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
+          RELEASE_ASSET_NAME: Wordvale-macOS-arm64.dmg
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$DMG_PATH#${RELEASE_ASSET_NAME}" --clobber
+          else
+            gh release create "$TAG_NAME" "$DMG_PATH#${RELEASE_ASSET_NAME}" \
+              --title "$RELEASE_NAME" \
+              --notes "Automated release for commit ${GITHUB_SHA}." \
+              --target "${GITHUB_SHA}" \
+              --latest
+          fi

@@ -347,6 +347,32 @@ This does two things:
 npm run dist:mac
 ```
 
+## GitHub Releases
+
+This repo now includes a GitHub Actions workflow at `.github/workflows/release-dmg.yml`.
+
+What it does:
+
+- runs on macOS whenever you push to `main`
+- builds the app and DMG
+- creates a new GitHub Release automatically
+- uploads the DMG to that release
+- also stores the DMG as a workflow artifact
+
+Typical release flow:
+
+```bash
+git push origin main
+```
+
+After the workflow finishes, GitHub will mark that newly created release as the latest release, and users can download the DMG from the Release page instead of building the app themselves.
+
+Because the release asset is uploaded with a stable name, you can also share a "latest download" link:
+
+```text
+https://github.com/arinaggarwal1/Wordvale/releases/latest/download/Wordvale-macOS-arm64.dmg
+```
+
 ## Design Choices
 
 Some decisions in this repo are deliberate and worth calling out:
