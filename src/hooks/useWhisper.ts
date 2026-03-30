@@ -10,7 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
     AdvancedSettings,
+    BackendDebugEntry,
     BackendResponse,
+    ModelStorageInfo,
     ProgressUpdate,
     QueueItem,
     QueueItemStatus,
@@ -30,11 +32,14 @@ interface UseWhisperReturn {
     isTranscribing: boolean;
     currentModel: string | null;
     systemInfo: SystemInfo | null;
+    modelStorage: ModelStorageInfo | null;
     models: WhisperModel[];
     queue: QueueItem[];
     activeResult: TranscriptionResult | null;
     progress: ProgressUpdate | null;
     error: string | null;
+    backendLogs: BackendDebugEntry[];
+    isUsingMockBackend: boolean;
 
     // Actions
     loadModel: (modelName: string, forceCpu?: boolean) => Promise<void>;
@@ -51,6 +56,9 @@ interface UseWhisperReturn {
     processQueue: (settings: AdvancedSettings, language: string, task: string) => Promise<void>;
     clearError: () => void;
     getSystemInfo: () => Promise<void>;
+    getModelStorage: () => Promise<void>;
+    deleteModel: (modelName: string) => Promise<void>;
+    deleteAllModels: () => Promise<void>;
     setActiveResult: (result: TranscriptionResult | null) => void;
 }
 
@@ -65,11 +73,14 @@ export function useWhisper(): UseWhisperReturn {
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [currentModel, setCurrentModel] = useState<string | null>(null);
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+    const [modelStorage, setModelStorage] = useState<ModelStorageInfo | null>(null);
     const [models, setModels] = useState<WhisperModel[]>([]);
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [activeResult, setActiveResult] = useState<TranscriptionResult | null>(null);
     const [progress, setProgress] = useState<ProgressUpdate | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [backendLogs, setBackendLogs] = useState<BackendDebugEntry[]>([]);
+    const [isUsingMockBackend, setIsUsingMockBackend] = useState(false);
 
     // Backend process reference — holds a write function and kill function
     const backendProcess = useRef<{
@@ -81,6 +92,32 @@ export function useWhisper(): UseWhisperReturn {
     const pendingRequests = useRef<
         Map<string, { resolve: (data: Record<string, unknown>) => void; reject: (err: Error) => void }>
     >(new Map());
+    const allowMockBackend = useRef(false);
+    const queueRef = useRef<QueueItem[]>([]);
+    const isProcessingQueueRef = useRef(false);
+    const isCancellingQueueRef = useRef(false);
+
+    const pushBackendLog = useCallback((level: BackendDebugEntry["level"], message: string) => {
+        const entry: BackendDebugEntry = {
+            timestamp: new Date().toISOString(),
+            level,
+            message,
+        };
+
+        setBackendLogs((prev) => [...prev.slice(-199), entry]);
+
+        if (level === "error") {
+            console.error("[Backend Debug]", message);
+        } else if (level === "warn") {
+            console.warn("[Backend Debug]", message);
+        } else {
+            console.log("[Backend Debug]", message);
+        }
+    }, []);
+
+    useEffect(() => {
+        queueRef.current = queue;
+    }, [queue]);
 
     // Handle incoming JSON messages from backend stdout
     const handleBackendMessage = useCallback((response: BackendResponse) => {
@@ -127,11 +164,14 @@ export function useWhisper(): UseWhisperReturn {
 
                 if (backendProcess.current) {
                     backendProcess.current.write(msg + "\n");
-                } else {
-                    // Mock mode for development without Tauri
+                } else if (allowMockBackend.current) {
+                    pushBackendLog("warn", `Backend unavailable, returning mock response for "${command}".`);
                     setTimeout(() => {
                         handleMockCommand(id, command, params, resolve);
                     }, 500);
+                } else {
+                    pendingRequests.current.delete(id);
+                    reject(new Error("Backend is not running. Open Backend Debug for startup details."));
                 }
 
                 // Timeout after 2 hours (long audio files can take significant time:
@@ -144,7 +184,7 @@ export function useWhisper(): UseWhisperReturn {
                 }, 7_200_000);
             });
         },
-        []
+        [pushBackendLog]
     );
 
     // Start the backend process
@@ -153,23 +193,27 @@ export function useWhisper(): UseWhisperReturn {
             if (IS_TAURI) {
                 try {
                     const { Command } = await import("@tauri-apps/api/shell");
+                    pushBackendLog(
+                        "info",
+                        `Starting backend in ${import.meta.env.PROD ? "production" : "development"} mode.`
+                    );
 
                     let cmd;
                     if (import.meta.env.PROD) {
                         // Production Bundle: Use the standalone sidecar binary
-                        console.log("[Backend] Production mode: Launching sidecar binary");
+                        pushBackendLog("info", 'Launching Tauri sidecar "binaries/whisper-backend".');
                         cmd = Command.sidecar("binaries/whisper-backend");
                     } else {
                         // Development: Use the shell script to run python from source
                         // This allows for hot-reloading backend changes without rebuilding the binary
-                        console.log("[Backend] Dev mode: Launching via shell script");
+                        pushBackendLog("info", 'Launching development backend via "bash ../backend/launch_backend.sh".');
                         cmd = new Command("bash", ["../backend/launch_backend.sh"]);
                     }
 
                     cmd.stdout.on("data", (line: string) => {
                         const trimmed = line.trim();
                         if (!trimmed) return;
-                        console.log("[Backend stdout]:", trimmed);
+                        pushBackendLog("info", `[stdout] ${trimmed}`);
 
                         try {
                             const response = JSON.parse(trimmed) as BackendResponse;
@@ -180,53 +224,64 @@ export function useWhisper(): UseWhisperReturn {
                     });
 
                     cmd.stderr.on("data", (line: string) => {
-                        console.error("[Backend stderr]:", line);
+                        const trimmed = line.trim();
+                        if (trimmed) {
+                            pushBackendLog("warn", `[stderr] ${trimmed}`);
+                        }
                     });
 
 
                     cmd.on("error", (err: Error) => {
-                        console.error("[Backend error]", err);
+                        pushBackendLog("error", `Backend process error: ${err.message}`);
                         setError("Backend process error: " + err.message);
                     });
 
                     cmd.on("close", (data: { code: number }) => {
-                        console.log("[Backend closed] code:", data.code);
+                        pushBackendLog("warn", `Backend process closed with code ${data.code}.`);
                         setIsBackendReady(false);
                         backendProcess.current = null;
                     });
 
                     const child = await cmd.spawn();
-                    console.log("[Backend] Python process spawned, PID:", child.pid);
+                    allowMockBackend.current = false;
+                    setIsUsingMockBackend(false);
+                    pushBackendLog("info", `Backend spawned successfully with PID ${child.pid}.`);
 
                     backendProcess.current = {
                         write: (data: string) => {
                             child.write(data).catch((err: Error) => {
-                                console.error("[Backend write error]", err);
+                                pushBackendLog("error", `Backend write error: ${err.message}`);
                             });
                         },
                         kill: () => {
                             child.kill().catch((err: Error) => {
-                                console.error("[Backend kill error]", err);
+                                pushBackendLog("error", `Backend kill error: ${err.message}`);
                             });
                         },
                     };
                 } catch (err) {
-                    console.error("Failed to start backend:", err);
-                    setError(
-                        `Failed to start Python backend: ${(err instanceof Error ? err.message : String(err))}. ` +
-                        `Make sure Python 3 is installed and 'openai-whisper' is available.`
-                    );
-                    // Fall back to mock mode
-                    initMockBackend();
+                    const errMsg = err instanceof Error
+                        ? err.message
+                        : (typeof err === 'object' && err !== null && 'message' in err)
+                            ? String((err as { message: unknown }).message)
+                            : (typeof err === 'string')
+                                ? err
+                                : JSON.stringify(err) ?? 'Unknown error';
+                    pushBackendLog("error", `Failed to start backend: ${errMsg}`);
+                    setError(`Failed to start backend: ${errMsg}`);
+                    setIsBackendReady(false);
+                    backendProcess.current = null;
                 }
             } else {
                 // Dev mode — use mock backend
-                console.log("[Backend] Running in browser dev mode with mock backend");
+                pushBackendLog("warn", "Running outside Tauri. Falling back to mock backend.");
                 initMockBackend();
             }
         }
 
         function initMockBackend() {
+            allowMockBackend.current = true;
+            setIsUsingMockBackend(true);
             setIsBackendReady(true);
             setSystemInfo({
                 gpu_available: false,
@@ -247,13 +302,14 @@ export function useWhisper(): UseWhisperReturn {
         return () => {
             backendProcess.current?.kill();
         };
-    }, [handleBackendMessage]);
+    }, [handleBackendMessage, pushBackendLog]);
 
     // Load models list on backend ready
     useEffect(() => {
         if (isBackendReady) {
             loadModelList();
             getSystemInfo();
+            getModelStorage();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isBackendReady]);
@@ -281,6 +337,15 @@ export function useWhisper(): UseWhisperReturn {
         }
     }
 
+    async function getModelStorage() {
+        try {
+            const result = await sendCommand("get_model_storage");
+            setModelStorage(result as unknown as ModelStorageInfo);
+        } catch (err) {
+            setError((err as Error).message);
+        }
+    }
+
     async function loadModel(modelName: string, forceCpu = false) {
         setIsModelLoading(true);
         setError(null);
@@ -295,6 +360,7 @@ export function useWhisper(): UseWhisperReturn {
                     prev ? { ...prev, current_model: modelName, model_loaded: true } : prev
                 );
             }
+            await getModelStorage();
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -311,12 +377,14 @@ export function useWhisper(): UseWhisperReturn {
         setIsTranscribing(true);
         setProgress(null);
         setError(null);
+        setActiveResult(null);
         try {
             const result = await sendCommand("transcribe_file", {
                 file_path: filePath,
                 language: language === "auto" ? null : language,
                 task,
                 threads: settings.threads,
+                word_timestamps: settings.wordTimestamps,
             });
             const transcriptionResult = result as unknown as TranscriptionResult;
             setActiveResult(transcriptionResult);
@@ -331,12 +399,51 @@ export function useWhisper(): UseWhisperReturn {
     }
 
     async function cancelTranscription() {
+        isCancellingQueueRef.current = true;
         try {
             await sendCommand("cancel_transcription");
         } catch {
             // Ignore cancel errors
         }
         setIsTranscribing(false);
+    }
+
+    async function deleteModel(modelName: string) {
+        setError(null);
+        try {
+            const result = await sendCommand("delete_model", { model: modelName });
+            if (result.status === "error") {
+                throw new Error(result.error as string);
+            }
+            if (currentModel === modelName) {
+                setCurrentModel(null);
+                setSystemInfo((prev) =>
+                    prev ? { ...prev, current_model: null, model_loaded: false } : prev
+                );
+            }
+            await Promise.all([getSystemInfo(), getModelStorage()]);
+        } catch (err) {
+            setError((err as Error).message);
+            throw err;
+        }
+    }
+
+    async function deleteAllModels() {
+        setError(null);
+        try {
+            const result = await sendCommand("delete_all_models");
+            if (result.status === "error") {
+                throw new Error(result.error as string);
+            }
+            setCurrentModel(null);
+            setSystemInfo((prev) =>
+                prev ? { ...prev, current_model: null, model_loaded: false } : prev
+            );
+            await Promise.all([getSystemInfo(), getModelStorage()]);
+        } catch (err) {
+            setError((err as Error).message);
+            throw err;
+        }
     }
 
     function addToQueue(files: { path: string; size: number }[]) {
@@ -378,27 +485,80 @@ export function useWhisper(): UseWhisperReturn {
         );
     }
 
+    useEffect(() => {
+        if (!isTranscribing || !progress) return;
+
+        setQueue((prev) => {
+            const processingIndex = prev.findIndex((item) => item.status === "processing");
+            if (processingIndex === -1) return prev;
+
+            const processingItem = prev[processingIndex];
+            const nextProgress = Math.max(
+                processingItem.progress,
+                Math.min(progress.percent ?? 0, 100)
+            );
+
+            if (nextProgress === processingItem.progress) return prev;
+
+            const updated = [...prev];
+            updated[processingIndex] = {
+                ...processingItem,
+                progress: nextProgress,
+            };
+            return updated;
+        });
+    }, [isTranscribing, progress]);
+
     async function processQueue(
         settings: AdvancedSettings,
         language: string,
         task: string
     ) {
-        const pending = queue.filter((item) => item.status === "pending");
-        for (const item of pending) {
-            updateQueueItem(item.id, { status: "processing", progress: 0 });
-            try {
-                const result = await transcribeFile(item.filePath, settings, language, task);
-                updateQueueItem(item.id, {
-                    status: "completed",
-                    progress: 100,
-                    result,
+        if (isProcessingQueueRef.current) return;
+
+        isProcessingQueueRef.current = true;
+        isCancellingQueueRef.current = false;
+        setError(null);
+
+        try {
+            while (!isCancellingQueueRef.current) {
+                const nextItem = queueRef.current.find((item) => item.status === "pending");
+                if (!nextItem) break;
+
+                updateQueueItem(nextItem.id, {
+                    status: "processing",
+                    progress: 0,
+                    error: undefined,
                 });
-            } catch (err) {
-                updateQueueItem(item.id, {
-                    status: "failed",
-                    error: (err as Error).message,
-                });
+
+                try {
+                    const result = await transcribeFile(nextItem.filePath, settings, language, task);
+                    updateQueueItem(nextItem.id, {
+                        status: "completed",
+                        progress: 100,
+                        result,
+                        error: undefined,
+                    });
+                } catch (err) {
+                    if (isCancellingQueueRef.current) {
+                        updateQueueItem(nextItem.id, {
+                            status: "pending",
+                            progress: 0,
+                            error: undefined,
+                        });
+                        break;
+                    }
+
+                    updateQueueItem(nextItem.id, {
+                        status: "failed",
+                        progress: 0,
+                        error: (err as Error).message,
+                    });
+                }
             }
+        } finally {
+            isProcessingQueueRef.current = false;
+            isCancellingQueueRef.current = false;
         }
     }
 
@@ -412,11 +572,14 @@ export function useWhisper(): UseWhisperReturn {
         isTranscribing,
         currentModel,
         systemInfo,
+        modelStorage,
         models,
         queue,
         activeResult,
         progress,
         error,
+        backendLogs,
+        isUsingMockBackend,
         loadModel,
         transcribeFile,
         cancelTranscription,
@@ -426,6 +589,9 @@ export function useWhisper(): UseWhisperReturn {
         processQueue,
         clearError,
         getSystemInfo,
+        getModelStorage,
+        deleteModel,
+        deleteAllModels,
         setActiveResult,
     };
 }
@@ -454,10 +620,31 @@ function handleMockCommand(
                 cpu_count: 8,
                 ram_total_gb: 16,
                 ram_available_gb: 8,
+                ffmpeg_available: true,
+                ffmpeg_path: "/mock/ffmpeg",
+                downloaded_models: [],
+                downloaded_models_info: [],
+                models_dir: "/mock/models",
+            });
+            break;
+        case "get_model_storage":
+            resolve({
+                models_dir: "/mock/models",
+                downloaded_models: [],
+                downloaded_count: 0,
+                total_size_bytes: 0,
+                total_size_mb: 0,
+                active_model: null,
             });
             break;
         case "load_model":
             resolve({ status: "loaded", model: _params.model, device: "cpu" });
+            break;
+        case "delete_model":
+            resolve({ status: "deleted", model: _params.model });
+            break;
+        case "delete_all_models":
+            resolve({ status: "deleted_all", deleted_models: [], errors: [] });
             break;
         case "transcribe_file":
             resolve({

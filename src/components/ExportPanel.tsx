@@ -15,10 +15,17 @@ import {
 } from "lucide-react";
 import { save } from "@tauri-apps/api/dialog";
 import { writeTextFile } from "@tauri-apps/api/fs";
-import type { TranscriptionResult, ExportFormat } from "../types/models";
+import type {
+    TranscriptionResult,
+    ExportFormat,
+    TranscriptVariantData,
+    TranscriptView,
+} from "../types/models";
 
 interface ExportPanelProps {
     result: TranscriptionResult | null;
+    selectedTranscriptView: TranscriptView;
+    showTranscriptViewSelector: boolean;
 }
 
 const formats: { id: ExportFormat; label: string; icon: React.ReactNode; ext: string; timestamps?: boolean }[] = [
@@ -28,12 +35,37 @@ const formats: { id: ExportFormat; label: string; icon: React.ReactNode; ext: st
     { id: "json", label: "JSON", icon: <Braces className="w-4 h-4" />, ext: ".json" },
 ];
 
-export default function ExportPanel({ result }: ExportPanelProps) {
+export default function ExportPanel({
+    result,
+    selectedTranscriptView,
+    showTranscriptViewSelector,
+}: ExportPanelProps) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
     const [exported, setExported] = useState(false);
 
     if (!result) return null;
+
+    const selectedTranscript: TranscriptVariantData = showTranscriptViewSelector
+        ? selectedTranscriptView === "english"
+            ? result.english || result.original || {
+                text: result.text,
+                srt: result.srt,
+                segments: result.segments,
+                language: result.language,
+            }
+            : result.original || result.english || {
+                text: result.text,
+                srt: result.srt,
+                segments: result.segments,
+                language: result.language,
+            }
+        : {
+            text: result.text,
+            srt: result.srt,
+            segments: result.segments,
+            language: result.language,
+        };
 
     const handleExport = async () => {
         if (isSaving) return;
@@ -43,32 +75,39 @@ export default function ExportPanel({ result }: ExportPanelProps) {
             const fmt = formats[selectedIdx];
             let content = "";
             let filename = result.file.replace(/\.[^.]+$/, "");
+            if (showTranscriptViewSelector) {
+                filename += selectedTranscriptView === "english" ? "_english" : "_original";
+            }
 
             // Prepare content
             switch (fmt.id) {
                 case "txt": {
                     if (fmt.timestamps) {
-                        content = result.segments
+                        content = selectedTranscript.segments
                             .map((seg) => {
                                 const ts = `[${formatTS(seg.start)} - ${formatTS(seg.end)}]`;
                                 return `${ts} ${seg.text.trim()}`;
                             })
                             .join("\n\n");
                     } else {
-                        content = result.text;
+                        content = selectedTranscript.text;
                     }
                     break;
                 }
                 case "srt":
-                    content = result.srt;
+                    content = selectedTranscript.srt;
                     break;
                 case "json":
                     content = JSON.stringify(
                         {
                             file: result.file,
-                            language: result.language,
+                            language: selectedTranscript.language,
+                            view: showTranscriptViewSelector ? selectedTranscriptView : "original",
+                            task: result.task || "transcribe",
+                            text: selectedTranscript.text,
+                            srt: selectedTranscript.srt,
                             duration_seconds: result.duration_seconds,
-                            segments: result.segments,
+                            segments: selectedTranscript.segments,
                         },
                         null,
                         2
@@ -103,6 +142,12 @@ export default function ExportPanel({ result }: ExportPanelProps) {
                 <Download className="w-3.5 h-3.5" />
                 Export
             </h3>
+
+            {showTranscriptViewSelector && (
+                <p className="mb-4 text-[11px] uppercase tracking-wider text-surface-500">
+                    Exporting {selectedTranscriptView === "english" ? "English translation" : "original transcript"}
+                </p>
+            )}
 
             {/* Format Selection Grid */}
             <div className="grid grid-cols-2 gap-2 mb-4">

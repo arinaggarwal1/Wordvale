@@ -7,6 +7,7 @@
     "dev": "vite",
     "build:backend": "chmod +x backend/package_backend.sh && backend/package_backend.sh",
     "build": "npm run build:backend && tsc && vite build",
+    "dist:mac": "chmod +x scripts/dist-mac.sh && scripts/dist-mac.sh",
     "preview": "vite preview",
     "tauri": "tauri"
   },

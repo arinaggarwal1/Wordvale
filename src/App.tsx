@@ -20,7 +20,7 @@ import {
 import { invoke } from "@tauri-apps/api/tauri";
 import { useWhisper } from "./hooks/useWhisper";
 import { DEFAULT_SETTINGS } from "./types/models";
-import type { AdvancedSettings } from "./types/models";
+import type { AdvancedSettings, TranscriptView } from "./types/models";
 import { estimateTime, formatDuration } from "./constants";
 
 import FileDropZone from "./components/FileDropZone";
@@ -30,6 +30,8 @@ import TranscriptionPanel from "./components/TranscriptionPanel";
 import AdvancedSettingsPanel from "./components/AdvancedSettingsPanel";
 import QueuePanel from "./components/QueuePanel";
 import ExportPanel from "./components/ExportPanel";
+import BackendDebugPanel from "./components/BackendDebugPanel";
+import ModelManagerPanel from "./components/ModelManagerPanel";
 
 export default function App() {
     const {
@@ -38,24 +40,31 @@ export default function App() {
         isTranscribing,
         currentModel,
         systemInfo,
+        modelStorage,
         models,
         queue,
         activeResult,
         progress,
         error,
+        backendLogs,
+        isUsingMockBackend,
         loadModel,
-        transcribeFile,
+        processQueue,
         cancelTranscription,
         addToQueue,
         removeFromQueue,
         reorderQueue,
         clearError,
+        getModelStorage,
+        deleteModel,
+        deleteAllModels,
     } = useWhisper();
 
     const [settings, setSettings] = useState<AdvancedSettings>(DEFAULT_SETTINGS);
     const [selectedLanguage, setSelectedLanguage] = useState("auto");
     const [selectedTask, setSelectedTask] = useState("transcribe");
     const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
+    const [selectedTranscriptView, setSelectedTranscriptView] = useState<TranscriptView>("original");
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -76,6 +85,13 @@ export default function App() {
             if (timerRef.current) clearInterval(timerRef.current);
         };
     }, [isTranscribing]);
+
+    useEffect(() => {
+        if (!selectedQueueId) return;
+        if (!queue.some((item) => item.id === selectedQueueId)) {
+            setSelectedQueueId(null);
+        }
+    }, [queue, selectedQueueId]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -111,7 +127,7 @@ export default function App() {
                 const { open } = await import("@tauri-apps/api/dialog");
                 const result = await open({
                     multiple: true,
-                    title: "Select Audio Files",
+                    title: "Select Audio or Video Files",
                     filters: [{ name: "Audio/Video", extensions: ["mp3", "wav", "flac", "m4a", "ogg", "aac", "opus", "webm", "mp4", "mkv", "avi", "mov"] }],
                 });
                 if (result) {
@@ -139,6 +155,7 @@ export default function App() {
     // Start transcription
     const handleStart = useCallback(async () => {
         if (isTranscribing || queue.length === 0) return;
+        if (!queue.some((item) => item.status === "pending")) return;
 
         // Reset selection to follow progress
         setSelectedQueueId(null);
@@ -148,23 +165,18 @@ export default function App() {
             await loadModel("base.en", settings.forceCpu);
         }
 
-        // Process the first pending file
-        const pending = queue.find((q) => q.status === "pending");
-        if (pending) {
-            await transcribeFile(
-                pending.filePath,
-                settings,
-                settings.autoDetectLanguage ? "auto" : selectedLanguage,
-                selectedTask
-            );
-        }
+        await processQueue(
+            settings,
+            settings.autoDetectLanguage ? "auto" : selectedLanguage,
+            selectedTask
+        );
     }, [
         isTranscribing,
         queue,
         currentModel,
         loadModel,
+        processQueue,
         settings,
-        transcribeFile,
         selectedLanguage,
         selectedTask,
     ]);
@@ -177,10 +189,30 @@ export default function App() {
     );
 
     const selectedModelInfo = models.find((m) => m.name === currentModel) || null;
+    const pendingCount = queue.filter((item) => item.status === "pending").length;
+    const completedCount = queue.filter((item) => item.status === "completed").length;
+    const failedCount = queue.filter((item) => item.status === "failed").length;
+    const currentProcessingItem = queue.find((item) => item.status === "processing") || null;
+    const queuedEstimateSeconds = queue
+        .filter((item) => item.status === "pending" || item.status === "processing")
+        .reduce((total, item) => total + estimateTime(item.fileSizeMb, currentModel), 0);
 
-    // Determine which result to display (selected item's result OR active streaming result)
+    const hasCompletedResults = queue.some((item) => item.result);
+
+    // Determine which result to display:
+    // while transcribing, follow the live result unless the user explicitly selects another item.
+    // after transcription, require an explicit selection so the panel does not imply a file is active.
     const selectedQueueItem = selectedQueueId ? queue.find((q) => q.id === selectedQueueId) : null;
-    const displayedResult = selectedQueueItem?.result || activeResult;
+    const displayedResult = selectedQueueItem?.result ?? (isTranscribing ? activeResult : null);
+    const displayedResultHasTranslation = Boolean(displayedResult?.original && displayedResult?.english);
+
+    useEffect(() => {
+        if (displayedResult?.original && displayedResult?.english) {
+            setSelectedTranscriptView("english");
+        } else {
+            setSelectedTranscriptView("original");
+        }
+    }, [displayedResult]);
 
     return (
         <div className="h-screen flex flex-col bg-surface-950">
@@ -251,7 +283,7 @@ export default function App() {
                         ) : (
                             <button
                                 onClick={handleStart}
-                                disabled={queue.length === 0 || isModelLoading}
+                                disabled={pendingCount === 0 || isModelLoading}
                                 className="btn-primary w-full py-3 text-sm font-semibold rounded-xl"
                             >
                                 {isModelLoading ? (
@@ -262,7 +294,7 @@ export default function App() {
                                 ) : (
                                     <>
                                         <Play className="w-4 h-4" />
-                                        Start Transcription
+                                        {pendingCount <= 1 ? "Start Queue" : `Process ${pendingCount} Files`}
                                     </>
                                 )}
                             </button>
@@ -277,16 +309,16 @@ export default function App() {
                 </aside>
 
                 {/* ═══════════════ MAIN CONTENT ═══════════════ */}
-                <main className="flex-1 flex flex-col min-w-0 p-5 gap-4 overflow-y-auto">
+                <main className="flex-1 flex flex-col min-w-0 min-h-0 p-5 gap-4 overflow-y-auto">
                     {/* File drop zone */}
                     <FileDropZone
                         onFilesSelected={addToQueue}
                         isTranscribing={isTranscribing}
-                        selectedFiles={queue.map((q) => ({
-                            fileName: q.fileName,
-                            fileSizeMb: q.fileSizeMb,
-                            estimate: formatDuration(estimateTime(q.fileSizeMb, currentModel)),
-                        }))}
+                        queueCount={queue.length}
+                        pendingCount={pendingCount}
+                        completedCount={completedCount}
+                        failedCount={failedCount}
+                        queuedEstimate={queue.length > 0 ? formatDuration(queuedEstimateSeconds) : null}
                     />
 
                     {/* Queue */}
@@ -296,15 +328,19 @@ export default function App() {
                         onReorder={reorderQueue}
                         currentModel={currentModel}
                         onSelect={setSelectedQueueId}
-                        selectedId={selectedQueueId}
+                        selectedId={selectedQueueId ?? currentProcessingItem?.id ?? null}
+                        isTranscribing={isTranscribing}
                     />
 
                     {/* Transcription output */}
-                    <div className="flex-1 min-h-[300px]">
+                    <div className="flex-1 min-h-[360px] shrink-0">
                         <TranscriptionPanel
                             result={displayedResult}
                             progress={progress}
                             isTranscribing={isTranscribing}
+                            emptyStateMode={hasCompletedResults ? "select" : "idle"}
+                            selectedTranscriptView={selectedTranscriptView}
+                            onTranscriptViewChange={setSelectedTranscriptView}
                         />
                     </div>
                 </main>
@@ -320,8 +356,28 @@ export default function App() {
                     />
 
                     <div className="mt-4">
-                        <ExportPanel result={displayedResult} />
+                        <ExportPanel
+                            result={displayedResult}
+                            selectedTranscriptView={selectedTranscriptView}
+                            showTranscriptViewSelector={displayedResultHasTranslation}
+                        />
                     </div>
+
+                    <ModelManagerPanel
+                        modelStorage={modelStorage}
+                        currentModel={currentModel}
+                        isTranscribing={isTranscribing}
+                        onRefresh={getModelStorage}
+                        onDeleteModel={deleteModel}
+                        onDeleteAllModels={deleteAllModels}
+                    />
+
+                    <BackendDebugPanel
+                        logs={backendLogs}
+                        isBackendReady={isBackendReady}
+                        isUsingMockBackend={isUsingMockBackend}
+                        error={error}
+                    />
                 </aside>
             </div>
 

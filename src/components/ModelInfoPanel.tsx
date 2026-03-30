@@ -171,6 +171,12 @@ export default function ModelInfoPanel({
                             value={systemInfo.device.toUpperCase()}
                             accent
                         />
+                        <StatRow
+                            icon={<HardDrive className="w-3.5 h-3.5" />}
+                            label="FFmpeg"
+                            value={systemInfo.ffmpeg_available ? "Available" : "Missing"}
+                            accent={systemInfo.ffmpeg_available}
+                        />
                     </div>
                 ) : (
                     <div className="space-y-2">

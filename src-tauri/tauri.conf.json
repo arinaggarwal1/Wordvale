@@ -22,6 +22,11 @@
                         "name": "bash",
                         "cmd": "bash",
                         "args": true
+                    },
+                    {
+                        "name": "binaries/whisper-backend",
+                        "sidecar": true,
+                        "args": true
                     }
                 ]
             },

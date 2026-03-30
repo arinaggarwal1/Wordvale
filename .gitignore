@@ -1,15 +1,20 @@
-# Node
-node_modules
-dist
+# Node / frontend
+node_modules/
+dist/
 .env
 .env.local
-.DS_Store
+.env.*
+!.env.example
 
 # Python
-backend/venv
-backend/__pycache__
+backend/venv/
+backend/__pycache__/
 *.pyc
-.pytest_cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
 
 # Backend build artifacts (PyInstaller)
 backend/build/
@@ -19,12 +24,18 @@ backend/whisper-backend.spec
 
 # Backend models (downloaded on demand)
 backend/whisper.cpp/models/*.bin
+backend/whisper.cpp/models/*.gguf
 backend/whisper.cpp/build/
 
 # Tauri
 src-tauri/target/
 src-tauri/gen/
 src-tauri/binaries/
+
+# Packaged app artifacts
+*.app
+*.dmg
+*.pkg
 
 # VSCode
 .vscode/*
@@ -38,6 +49,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # OS
+.DS_Store
+**/.DS_Store
 Thumbs.db
 *.swp
 *.swo

@@ -8,8 +8,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
     Upload,
-    FileAudio,
     Plus,
+    ListOrdered,
+    CheckCircle2,
+    AlertCircle,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/tauri";
 
@@ -19,7 +21,11 @@ const IS_TAURI =
 interface FileDropZoneProps {
     onFilesSelected: (files: { path: string; size: number }[]) => void;
     isTranscribing: boolean;
-    selectedFiles: { fileName: string; fileSizeMb: number; estimate?: string }[];
+    queueCount: number;
+    pendingCount: number;
+    completedCount: number;
+    failedCount: number;
+    queuedEstimate: string | null;
 }
 
 const ACCEPTED_EXTENSIONS = [
@@ -31,7 +37,11 @@ const ACCEPTED_EXTENSIONS = [
 export default function FileDropZone({
     onFilesSelected,
     isTranscribing,
-    selectedFiles,
+    queueCount,
+    pendingCount,
+    completedCount,
+    failedCount,
+    queuedEstimate,
 }: FileDropZoneProps) {
     const [isDragOver, setIsDragOver] = useState(false);
 
@@ -105,7 +115,7 @@ export default function FileDropZone({
                 const { open } = await import("@tauri-apps/api/dialog");
                 const result = await open({
                     multiple: true,
-                    title: "Select Audio Files",
+                    title: "Select Audio or Video Files",
                     filters: [
                         {
                             name: "Audio/Video",
@@ -144,7 +154,7 @@ export default function FileDropZone({
         }
     }, [isTranscribing, processPaths, onFilesSelected]);
 
-    const hasFiles = selectedFiles.length > 0;
+    const hasFiles = queueCount > 0;
 
     return (
         <div className="animate-fade-in">
@@ -163,41 +173,62 @@ export default function FileDropZone({
         `}
             >
                 {hasFiles ? (
-                    /* ─── Files preview ─── */
-                    <div className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs font-medium uppercase tracking-wider text-surface-400">
-                                Selected Files ({selectedFiles.length})
-                            </span>
+                    /* ─── Queue summary ─── */
+                    <div className="p-3.5 sm:p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <span className="text-xs font-medium uppercase tracking-wider text-surface-400">
+                                    Queue Ready
+                                </span>
+                                <p className="mt-1 text-sm font-semibold text-surface-100">
+                                    {queueCount} {queueCount === 1 ? "file" : "files"} in this batch
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-surface-500">
+                                    Add more here, then manage the batch below.
+                                </p>
+                            </div>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleBrowseClick();
                                 }}
-                                className="btn-ghost text-xs gap-1"
+                                className="btn-ghost text-xs gap-1 self-start"
                                 disabled={isTranscribing}
                             >
                                 <Plus className="w-3.5 h-3.5" />
                                 Add More
                             </button>
                         </div>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                            {selectedFiles.map((file, i) => (
-                                <div
-                                    key={`${file.fileName}-${i}`}
-                                    className="flex items-center gap-3 rounded-lg bg-surface-800/50 px-3 py-2.5 group"
-                                >
-                                    <FileAudio className="w-4 h-4 text-accent-400 shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-surface-200 truncate">
-                                            {file.fileName}
-                                        </p>
-                                        <p className="text-xs text-surface-500">
-                                            {file.fileSizeMb} MB {file.estimate && `• ${file.estimate}`}
-                                        </p>
-                                    </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <div className="rounded-full border border-surface-800/60 bg-surface-900/50 px-3 py-2">
+                                <div className="flex items-center gap-2 text-surface-400">
+                                    <ListOrdered className="w-4 h-4" />
+                                    <span className="text-[11px] uppercase tracking-wider">Up Next</span>
                                 </div>
-                            ))}
+                                <p className="mt-1 text-sm font-semibold text-surface-100">
+                                    {pendingCount}
+                                    <span className="ml-2 text-[11px] font-normal text-surface-500">
+                                        {queuedEstimate ? `Est. ${queuedEstimate}` : "Ready"}
+                                    </span>
+                                </p>
+                            </div>
+
+                            <div className="rounded-full border border-surface-800/60 bg-surface-900/50 px-3 py-2">
+                                <div className="flex items-center gap-2 text-surface-400">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span className="text-[11px] uppercase tracking-wider">Completed</span>
+                                </div>
+                                <p className="mt-1 text-sm font-semibold text-surface-100">{completedCount}</p>
+                            </div>
+
+                            <div className="rounded-full border border-surface-800/60 bg-surface-900/50 px-3 py-2">
+                                <div className="flex items-center gap-2 text-surface-400">
+                                    <AlertCircle className="w-4 h-4" />
+                                    <span className="text-[11px] uppercase tracking-wider">Needs Attention</span>
+                                </div>
+                                <p className="mt-1 text-sm font-semibold text-surface-100">{failedCount}</p>
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -215,7 +246,7 @@ export default function FileDropZone({
                             />
                         </div>
                         <p className="text-sm font-medium text-surface-200 mb-1">
-                            {isDragOver ? "Drop your files here" : "Drop audio files here"}
+                            {isDragOver ? "Drop your files here" : "Drop audio or video files here"}
                         </p>
                         <p className="text-xs text-surface-500 text-center">
                             or click to browse · MP3, WAV, FLAC, M4A, OGG, MP4 and more

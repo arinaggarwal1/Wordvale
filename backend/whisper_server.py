@@ -22,6 +22,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -31,27 +32,42 @@ import traceback
 import urllib.request
 from typing import Any, Dict, List, Optional
 
+import imageio_ffmpeg
+
 from model_registry import get_all_models, get_model_info, get_model_names, MODEL_REGISTRY
+
+# Shared user data directory
+APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/Wordvale")
+MODELS_DIR = os.path.join(APP_SUPPORT_DIR, "models")
 
 # Paths
 if getattr(sys, 'frozen', False):
-    # Running as compiled PyInstaller binary
+    # Running as compiled PyInstaller binary (Tauri sidecar)
     BUNDLE_DIR = os.path.dirname(sys.executable)
-    # Resources: ../Resources/
-    RESOURCES_DIR = os.path.join(BUNDLE_DIR, "../Resources")
-    # CLI stashed in bundle_resources
-    WHISPER_CLI = os.path.join(RESOURCES_DIR, "backend", "bundle_resources", "whisper-cli")
-    
-    # Models: User Data Directory (Writable)
-    # ~/Library/Application Support/Wordvale/models
-    app_support = os.path.expanduser("~/Library/Application Support/Wordvale")
-    MODELS_DIR = os.path.join(app_support, "models")
+    # Resources: ../Resources/ (Tauri uses _up_ prefix for parent-relative resources)
+    RESOURCES_DIR = os.path.join(BUNDLE_DIR, "..", "Resources")
+
+    # Try Tauri's bundle path first (_up_/backend/bundle_resources/),
+    # then fallback to direct path
+    _candidates = [
+        os.path.join(RESOURCES_DIR, "_up_", "backend", "bundle_resources", "whisper-cli"),
+        os.path.join(RESOURCES_DIR, "backend", "bundle_resources", "whisper-cli"),
+        os.path.join(BUNDLE_DIR, "whisper-cli"),
+    ]
+    WHISPER_CLI = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
+
+    # Metal shader — same search pattern
+    _metal_candidates = [
+        os.path.join(RESOURCES_DIR, "_up_", "backend", "bundle_resources", "ggml-metal.metal"),
+        os.path.join(RESOURCES_DIR, "backend", "bundle_resources", "ggml-metal.metal"),
+    ]
+    METAL_SHADER = next((p for p in _metal_candidates if os.path.exists(p)), _metal_candidates[0])
+
 else:
     # Running as script
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     WHISPER_CPP_DIR = os.path.join(SCRIPT_DIR, "whisper.cpp")
     WHISPER_CLI = os.path.join(WHISPER_CPP_DIR, "build", "bin", "whisper-cli")
-    MODELS_DIR = os.path.join(WHISPER_CPP_DIR, "models")
 
 # Ensure models directory exists
 os.makedirs(MODELS_DIR, exist_ok=True)
@@ -67,6 +83,7 @@ class WhisperServer:
         self._output_lock = threading.Lock()
         self._active_process: Optional[subprocess.Popen] = None
         self._cancel_event = threading.Event()
+        self._ffmpeg_path = self._resolve_ffmpeg_path()
 
     def _send_response(self, response: Dict[str, Any]) -> None:
         """Send a JSON response line to stdout."""
@@ -90,6 +107,28 @@ class WhisperServer:
         info = MODEL_REGISTRY.get(model_name, {})
         filename = info.get("ggml_filename", f"ggml-{model_name}.bin")
         return os.path.join(MODELS_DIR, filename)
+
+    def _get_downloaded_models_info(self) -> List[Dict[str, Any]]:
+        """Return detailed info for downloaded models."""
+        downloaded: List[Dict[str, Any]] = []
+
+        for name, metadata in MODEL_REGISTRY.items():
+            path = self._get_model_path(name)
+            if not os.path.exists(path):
+                continue
+
+            size_bytes = os.path.getsize(path)
+            downloaded.append({
+                "name": name,
+                "display_name": metadata.get("display_name", name),
+                "path": path,
+                "size_bytes": size_bytes,
+                "size_mb": round(size_bytes / (1024 * 1024), 2),
+                "recommended_use_case": metadata.get("recommended_use_case", ""),
+            })
+
+        downloaded.sort(key=lambda item: item["display_name"].lower())
+        return downloaded
 
     def _is_model_downloaded(self, model_name: str) -> bool:
         """Check if a model file exists on disk."""
@@ -146,6 +185,8 @@ class WhisperServer:
             "current_model": self._current_model,
             "model_loaded": self._current_model is not None,
             "whisper_cli_available": os.path.exists(WHISPER_CLI),
+            "ffmpeg_available": self._ffmpeg_path is not None,
+            "ffmpeg_path": self._ffmpeg_path,
         }
 
         try:
@@ -164,19 +205,127 @@ class WhisperServer:
             info["ram_available_gb"] = 0
 
         # List downloaded models
-        downloaded = []
-        for name in get_model_names():
-            if self._is_model_downloaded(name):
-                downloaded.append(name)
-        info["downloaded_models"] = downloaded
+        downloaded_models_info = self._get_downloaded_models_info()
+        info["downloaded_models"] = [item["name"] for item in downloaded_models_info]
+        info["downloaded_models_info"] = downloaded_models_info
+        info["models_dir"] = MODELS_DIR
 
         return info
 
+    def _get_model_storage(self) -> Dict[str, Any]:
+        """Return model storage summary for the frontend model manager."""
+        downloaded_models = self._get_downloaded_models_info()
+        total_size_bytes = sum(item["size_bytes"] for item in downloaded_models)
+        return {
+            "models_dir": MODELS_DIR,
+            "downloaded_models": downloaded_models,
+            "downloaded_count": len(downloaded_models),
+            "total_size_bytes": total_size_bytes,
+            "total_size_mb": round(total_size_bytes / (1024 * 1024), 2),
+            "active_model": self._current_model,
+        }
+
+    def _delete_model(self, model_name: str) -> Dict[str, Any]:
+        """Delete a downloaded model file."""
+        if model_name not in MODEL_REGISTRY:
+            return {"status": "error", "error": f"Unknown model: {model_name}"}
+
+        if self._active_process is not None:
+            return {"status": "error", "error": "Cannot delete models while transcription is in progress."}
+
+        path = self._get_model_path(model_name)
+        if not os.path.exists(path):
+            return {"status": "not_found", "model": model_name}
+
+        try:
+            os.unlink(path)
+            if self._current_model == model_name:
+                self._current_model = None
+            return {"status": "deleted", "model": model_name}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc), "model": model_name}
+
+    def _delete_all_models(self) -> Dict[str, Any]:
+        """Delete all downloaded models from disk."""
+        if self._active_process is not None:
+            return {"status": "error", "error": "Cannot delete models while transcription is in progress."}
+
+        deleted: List[str] = []
+        errors: List[Dict[str, str]] = []
+
+        for model_name in get_model_names():
+            path = self._get_model_path(model_name)
+            if not os.path.exists(path):
+                continue
+
+            try:
+                os.unlink(path)
+                deleted.append(model_name)
+            except Exception as exc:
+                errors.append({"model": model_name, "error": str(exc)})
+
+        if self._current_model in deleted:
+            self._current_model = None
+
+        return {
+            "status": "deleted_all" if not errors else "partial",
+            "deleted_models": deleted,
+            "errors": errors,
+        }
+
+    def _resolve_ffmpeg_path(self) -> Optional[str]:
+        """Find ffmpeg even when the app is launched outside a shell PATH."""
+        env_candidate = os.environ.get("FFMPEG_PATH")
+        candidates: List[str] = []
+
+        if env_candidate:
+            candidates.append(env_candidate)
+
+        try:
+            packaged_candidate = imageio_ffmpeg.get_ffmpeg_exe()
+            if packaged_candidate:
+                candidates.append(packaged_candidate)
+        except Exception:
+            packaged_candidate = None
+
+        which_candidate = shutil.which("ffmpeg")
+        if which_candidate:
+            candidates.append(which_candidate)
+
+        candidates.extend([
+            "/opt/homebrew/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg",
+            "/usr/bin/ffmpeg",
+        ])
+
+        if getattr(sys, "frozen", False):
+            candidates.extend([
+                os.path.join(BUNDLE_DIR, "ffmpeg"),
+                os.path.join(RESOURCES_DIR, "_up_", "backend", "bundle_resources", "ffmpeg"),
+                os.path.join(RESOURCES_DIR, "backend", "bundle_resources", "ffmpeg"),
+            ])
+
+        seen = set()
+        for candidate in candidates:
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+
+        return None
+
     def _convert_to_wav(self, input_path: str) -> str:
         """Convert any audio file to 16-bit WAV using ffmpeg."""
+        if not self._ffmpeg_path:
+            raise RuntimeError(
+                "ffmpeg not found. Install ffmpeg with Homebrew (`brew install ffmpeg`) "
+                "or set FFMPEG_PATH to the full ffmpeg binary path."
+            )
+
         wav_path = tempfile.mktemp(suffix=".wav")
         cmd = [
-            "ffmpeg", "-y",
+            self._ffmpeg_path, "-y",
             "-i", input_path,
             "-ar", "16000",
             "-ac", "1",
@@ -187,6 +336,126 @@ class WhisperServer:
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg conversion failed: {result.stderr.strip()}")
         return wav_path
+
+    def _run_whisper_cli(
+        self,
+        *,
+        wav_path: str,
+        model_path: str,
+        language: Optional[str],
+        task: str,
+        threads: int,
+        word_timestamps: bool,
+        progress_percent: int,
+        progress_message: str,
+        file_name: str,
+    ) -> Dict[str, Any]:
+        """Run whisper-cli once and return its raw JSON output."""
+        output_base = tempfile.mktemp()
+
+        cmd = [
+            WHISPER_CLI,
+            "-m", model_path,
+            "-f", wav_path,
+            "-t", str(threads),
+            "-ojf" if word_timestamps else "-oj",
+            "-of", output_base,
+        ]
+
+        if word_timestamps:
+            cmd.extend(["-ml", "1"])
+
+        if language and language != "auto" and language != "None":
+            cmd.extend(["-l", language])
+        else:
+            cmd.extend(["-l", "auto"])
+
+        if task == "translate":
+            cmd.append("-tr")
+
+        self._send_progress({
+            "type": "progress",
+            "stage": "transcribing" if task == "transcribe" else "translating",
+            "file": file_name,
+            "percent": progress_percent,
+            "message": progress_message,
+        })
+
+        try:
+            self._active_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+
+            stderr_buffer = []
+            stdout_buffer = []
+
+            def read_stream(stream, buffer, prefix):
+                try:
+                    for line in iter(stream.readline, ''):
+                        if not line:
+                            break
+                        stripped = line.strip()
+                        if stripped:
+                            buffer.append(stripped)
+                            sys.stderr.write(f"[{prefix}] {stripped}\n")
+                            sys.stderr.flush()
+                except Exception:
+                    pass
+
+            stderr_thread = threading.Thread(
+                target=read_stream,
+                args=(self._active_process.stderr, stderr_buffer, "whisper-cli"),
+            )
+            stderr_thread.daemon = True
+            stderr_thread.start()
+
+            stdout_thread = threading.Thread(
+                target=read_stream,
+                args=(self._active_process.stdout, stdout_buffer, "whisper-cli-out"),
+            )
+            stdout_thread.daemon = True
+            stdout_thread.start()
+
+            while self._active_process.poll() is None:
+                if self._cancel_event.is_set():
+                    self._active_process.terminate()
+                    try:
+                        self._active_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self._active_process.kill()
+                    return {"status": "cancelled"}
+                time.sleep(0.5)
+
+            stderr_thread.join(timeout=1.0)
+            stdout_thread.join(timeout=1.0)
+
+            returncode = self._active_process.returncode
+            stderr_output = "\n".join(stderr_buffer)
+            self._active_process = None
+
+            if returncode != 0:
+                return {
+                    "status": "error",
+                    "error": f"whisper-cli failed (exit code {returncode}): {stderr_output[-1000:]}",
+                }
+
+            json_output_path = output_base + ".json"
+            if not os.path.exists(json_output_path):
+                return {"status": "error", "error": "No JSON output file generated by whisper-cli"}
+
+            with open(json_output_path, "r") as f:
+                return {"status": "completed", "raw_output": json.load(f)}
+        finally:
+            json_output_path = output_base + ".json"
+            try:
+                if os.path.exists(json_output_path):
+                    os.unlink(json_output_path)
+            except Exception:
+                pass
 
     def _transcribe_file(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -199,6 +468,7 @@ class WhisperServer:
         language = params.get("language", None)
         task = params.get("task", "transcribe")
         threads = params.get("threads", max(1, (os.cpu_count() or 4) // 2))
+        word_timestamps = bool(params.get("word_timestamps", False))
 
         # Model name — use stored model or default
         model_name = self._current_model or "base.en"
@@ -242,107 +512,68 @@ class WhisperServer:
             if self._cancel_event.is_set():
                 return {"status": "cancelled"}
 
-            # Step 2: Prepare output path for JSON
-            output_base = tempfile.mktemp()
-
-            # Step 3: Build whisper-cli command
-            cmd = [
-                WHISPER_CLI,
-                "-m", model_path,
-                "-f", wav_path,
-                "-t", str(threads),
-                "-oj",                           # output JSON (full)
-                "-of", output_base,              # output file base name
-                # "--no-prints",                   # suppress progress to stderr (COMMENTED OUT FOR DEBUGGING)
-            ]
-
-            if language and language != "auto" and language != "None":
-                cmd.extend(["-l", language])
-            else:
-                cmd.extend(["-l", "auto"])
-
-            if task == "translate":
-                cmd.append("-tr")                # translate to English
-
-            self._send_progress({
-                "type": "progress",
-                "stage": "transcribing",
-                "file": os.path.basename(file_path),
-                "percent": 20,
-                "message": f"Transcribing with {model_name} on {self._detect_device().upper()}...",
-            })
-
-            # Step 4: Run whisper-cli
-            self._active_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,  # Line buffered
+            file_name = os.path.basename(file_path)
+            original_run = self._run_whisper_cli(
+                wav_path=wav_path,
+                model_path=model_path,
+                language=language,
+                task="transcribe",
+                threads=threads,
+                word_timestamps=word_timestamps,
+                progress_percent=20,
+                progress_message=f"Transcribing original audio with {model_name} on {self._detect_device().upper()}...",
+                file_name=file_name,
             )
+            if original_run.get("status") != "completed":
+                return original_run
 
-            # Helper to read stream in a separate thread
-            stderr_buffer = []
-            stdout_buffer = []
-
-            def read_stream(stream, buffer, prefix):
-                try:
-                    for line in iter(stream.readline, ''):
-                        if not line: break
-                        stripped = line.strip()
-                        if stripped:
-                            buffer.append(stripped)
-                            sys.stderr.write(f"[{prefix}] {stripped}\n")
-                            sys.stderr.flush()
-                except Exception:
-                    pass
-            
-            import threading
-            stderr_thread = threading.Thread(target=read_stream, args=(self._active_process.stderr, stderr_buffer, "whisper-cli"))
-            stderr_thread.daemon = True
-            stderr_thread.start()
-
-            stdout_thread = threading.Thread(target=read_stream, args=(self._active_process.stdout, stdout_buffer, "whisper-cli-out"))
-            stdout_thread.daemon = True
-            stdout_thread.start()
-
-            # Monitor the process
-            while self._active_process.poll() is None:
-                if self._cancel_event.is_set():
-                    self._active_process.terminate()
-                    try:
-                        self._active_process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        self._active_process.kill()
-                    return {"status": "cancelled"}
-                time.sleep(0.5)
-            
-            # Allow threads to finish
-            stderr_thread.join(timeout=1.0)
-            stdout_thread.join(timeout=1.0)
-
-            returncode = self._active_process.returncode
-            stderr_output = "\n".join(stderr_buffer)
-            self._active_process = None
-
-            if returncode != 0:
-                return {
-                    "status": "error",
-                    "error": f"whisper-cli failed (exit code {returncode}): {stderr_output[-1000:]}",
-                }
-
-            # Step 5: Read the JSON output file
-            json_output_path = output_base + ".json"
-            if not os.path.exists(json_output_path):
-                return {"status": "error", "error": "No JSON output file generated by whisper-cli"}
-
-            with open(json_output_path, "r") as f:
-                raw_output = json.load(f)
-
+            original_result = self._parse_output(original_run["raw_output"], 0, file_path)
             elapsed = time.time() - start_time
 
-            # Step 6: Parse whisper.cpp JSON output
-            result = self._parse_output(raw_output, elapsed, file_path)
+            if task == "translate":
+                translated_run = self._run_whisper_cli(
+                    wav_path=wav_path,
+                    model_path=model_path,
+                    language=language,
+                    task="translate",
+                    threads=threads,
+                    word_timestamps=word_timestamps,
+                    progress_percent=65,
+                    progress_message="Translating transcript to English...",
+                    file_name=file_name,
+                )
+                if translated_run.get("status") != "completed":
+                    return translated_run
+
+                translated_result = self._parse_output(translated_run["raw_output"], 0, file_path)
+                result = {
+                    "text": translated_result["text"],
+                    "srt": translated_result["srt"],
+                    "segments": translated_result["segments"],
+                    "language": translated_result["language"],
+                    "duration_seconds": round(elapsed, 2),
+                    "file": os.path.basename(file_path),
+                    "file_path": file_path,
+                    "task": "translate",
+                    "original": {
+                        "text": original_result["text"],
+                        "srt": original_result["srt"],
+                        "segments": original_result["segments"],
+                        "language": original_result["language"],
+                    },
+                    "english": {
+                        "text": translated_result["text"],
+                        "srt": translated_result["srt"],
+                        "segments": translated_result["segments"],
+                        "language": translated_result["language"],
+                    },
+                }
+            else:
+                result = {
+                    **original_result,
+                    "duration_seconds": round(elapsed, 2),
+                    "task": "transcribe",
+                }
 
             self._send_progress({
                 "type": "progress",
@@ -362,7 +593,7 @@ class WhisperServer:
             }
         finally:
             # Cleanup temp files
-            for path in [wav_path, output_base + ".json" if 'output_base' in dir() else None]:
+            for path in [wav_path]:
                 try:
                     if path and os.path.exists(path):
                         os.unlink(path)
@@ -398,14 +629,38 @@ class WhisperServer:
             start_ms = offsets.get("from", 0)
             end_ms = offsets.get("to", 0)
             text = entry.get("text", "").strip()
+            words: List[Dict[str, Any]] = []
 
-            segments.append({
+            for token in entry.get("tokens", []) or []:
+                token_offsets = token.get("offsets", {})
+                token_start_ms = token_offsets.get("from")
+                token_end_ms = token_offsets.get("to")
+                token_text = str(token.get("text", ""))
+
+                if token_start_ms is None or token_end_ms is None:
+                    continue
+
+                if not token_text.strip():
+                    continue
+
+                words.append({
+                    "word": token_text.strip(),
+                    "start": token_start_ms / 1000.0,
+                    "end": token_end_ms / 1000.0,
+                    "probability": float(token.get("p", 0.0)),
+                })
+
+            segment: Dict[str, Any] = {
                 "id": i,
                 "start": start_ms / 1000.0,
                 "end": end_ms / 1000.0,
                 "text": text,
                 "speaker": "[Speaker]",
-            })
+            }
+            if words:
+                segment["words"] = words
+
+            segments.append(segment)
             text_parts.append(text)
 
         full_text = " ".join(text_parts).strip()
@@ -462,6 +717,9 @@ class WhisperServer:
             elif cmd == "get_all_models":
                 result = {"models": get_all_models(), "names": get_model_names()}
 
+            elif cmd == "get_model_storage":
+                result = self._get_model_storage()
+
             elif cmd == "load_model":
                 model_name = params.get("model", "base.en")
                 self._current_model = model_name
@@ -489,6 +747,13 @@ class WhisperServer:
             elif cmd == "download_model":
                 model_name = params.get("model", "")
                 result = self._download_model(model_name)
+
+            elif cmd == "delete_model":
+                model_name = params.get("model", "")
+                result = self._delete_model(model_name)
+
+            elif cmd == "delete_all_models":
+                result = self._delete_all_models()
 
             elif cmd == "transcribe_file":
                 result = self._transcribe_file(params)

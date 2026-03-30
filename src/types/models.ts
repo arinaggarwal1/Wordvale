@@ -34,6 +34,11 @@ export interface SystemInfo {
     cpu_count: number;
     ram_total_gb: number;
     ram_available_gb: number;
+    ffmpeg_available?: boolean;
+    ffmpeg_path?: string | null;
+    downloaded_models?: string[];
+    downloaded_models_info?: DownloadedModelInfo[];
+    models_dir?: string;
 }
 
 /* ─── Transcription ─── */
@@ -70,6 +75,15 @@ export interface WordTimestamp {
     probability: number;
 }
 
+export type TranscriptView = "original" | "english";
+
+export interface TranscriptVariantData {
+    text: string;
+    srt: string;
+    segments: TranscriptionSegment[];
+    language: string;
+}
+
 export interface TranscriptionResult {
     status: string;
     text: string;
@@ -79,6 +93,9 @@ export interface TranscriptionResult {
     duration_seconds: number;
     file: string;
     file_path: string;
+    task?: "transcribe" | "translate";
+    original?: TranscriptVariantData;
+    english?: TranscriptVariantData;
 }
 
 /* ─── Advanced Settings ─── */
@@ -124,6 +141,32 @@ export interface ProgressUpdate {
     segment_index?: number;
     total_segments?: number;
     segment?: TranscriptionSegment;
+}
+
+export interface DownloadedModelInfo {
+    name: string;
+    display_name: string;
+    path: string;
+    size_bytes: number;
+    size_mb: number;
+    recommended_use_case: string;
+}
+
+export interface ModelStorageInfo {
+    models_dir: string;
+    downloaded_models: DownloadedModelInfo[];
+    downloaded_count: number;
+    total_size_bytes: number;
+    total_size_mb: number;
+    active_model: string | null;
+}
+
+export type BackendLogLevel = "info" | "warn" | "error";
+
+export interface BackendDebugEntry {
+    timestamp: string;
+    level: BackendLogLevel;
+    message: string;
 }
 
 /* ─── Export Options ─── */
