@@ -66,8 +66,11 @@ if getattr(sys, 'frozen', False):
 else:
     # Running as script
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-    WHISPER_CPP_DIR = os.path.join(SCRIPT_DIR, "whisper.cpp")
-    WHISPER_CLI = os.path.join(WHISPER_CPP_DIR, "build", "bin", "whisper-cli")
+    _dev_candidates = [
+        os.path.join(SCRIPT_DIR, "bundle_resources", "whisper-cli"),
+        os.path.join(SCRIPT_DIR, "whisper.cpp", "build", "bin", "whisper-cli"),
+    ]
+    WHISPER_CLI = next((p for p in _dev_candidates if os.path.exists(p)), _dev_candidates[0])
 
 # Ensure models directory exists
 os.makedirs(MODELS_DIR, exist_ok=True)
