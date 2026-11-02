@@ -10,8 +10,6 @@ import {
     ChevronDown,
     Sliders,
     Clock,
-    Cpu,
-    Globe,
     Save,
 } from "lucide-react";
 import type { AdvancedSettings } from "../types/models";
@@ -182,24 +180,8 @@ export default function AdvancedSettingsPanel({
                     />
 
                     <ToggleRow
-                        label="Force CPU"
-                        description="Use CPU even if MPS/GPU is available"
-                        icon={<Cpu className="w-3.5 h-3.5" />}
-                        checked={settings.forceCpu}
-                        onChange={(v) => update({ forceCpu: v })}
-                    />
-
-                    <ToggleRow
-                        label="Auto Detect Language"
-                        description="Let Whisper detect the language"
-                        icon={<Globe className="w-3.5 h-3.5" />}
-                        checked={settings.autoDetectLanguage}
-                        onChange={(v) => update({ autoDetectLanguage: v })}
-                    />
-
-                    <ToggleRow
                         label="Auto Save Output"
-                        description="Automatically save transcription files"
+                        description="Choose a folder at the start of each batch; saves text files"
                         icon={<Save className="w-3.5 h-3.5" />}
                         checked={settings.autoSaveOutput}
                         onChange={(v) => update({ autoSaveOutput: v })}

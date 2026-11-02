@@ -26,6 +26,7 @@ interface ExportPanelProps {
     result: TranscriptionResult | null;
     selectedTranscriptView: TranscriptView;
     showTranscriptViewSelector: boolean;
+    onSaved: (view: TranscriptView) => void;
 }
 
 const formats: {
@@ -47,10 +48,12 @@ export default function ExportPanel({
     result,
     selectedTranscriptView,
     showTranscriptViewSelector,
+    onSaved,
 }: ExportPanelProps) {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
     const [exported, setExported] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const selectedTranscript: TranscriptVariantData | null = result
         ? showTranscriptViewSelector
             ? selectedTranscriptView === "english"
@@ -95,6 +98,7 @@ export default function ExportPanel({
     const handleExport = async () => {
         if (isSaving) return;
         setIsSaving(true);
+        setSaveError(null);
 
         try {
             const fmt = formats[selectedIdx];
@@ -158,11 +162,12 @@ export default function ExportPanel({
 
             if (path) {
                 await writeTextFile(path, content);
+                onSaved(showTranscriptViewSelector ? selectedTranscriptView : "original");
                 setExported(true);
                 setTimeout(() => setExported(false), 2500);
             }
         } catch (err) {
-            console.error("Failed to save file:", err);
+            setSaveError(`Could not save the transcript: ${String(err)}. Please try again.`);
         } finally {
             setIsSaving(false);
         }
@@ -207,9 +212,12 @@ export default function ExportPanel({
                 })}
             </div>
 
+            {saveError && <p role="alert" className="text-xs text-danger-400 mb-3 break-words">{saveError}</p>}
+
             {/* Main Save Button */}
             <button
                 onClick={handleExport}
+                disabled={isSaving}
                 className={`
                     w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium
                     transition-all duration-200

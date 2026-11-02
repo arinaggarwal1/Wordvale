@@ -35,11 +35,44 @@ interface DropdownProps {
     options: { value: string; label: string; sublabel?: string }[];
     onChange: (value: string) => void;
     disabled?: boolean;
+    typeAhead?: boolean;
 }
 
-function Dropdown({ label, icon, value, displayValue, options, onChange, disabled }: DropdownProps) {
+function Dropdown({ label, icon, value, displayValue, options, onChange, disabled, typeAhead = false }: DropdownProps) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
+    const optionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+    const search = useRef({ text: "", at: 0 });
+    const [highlighted, setHighlighted] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!typeAhead || !open) return;
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                setOpen(false);
+                return;
+            }
+            if (event.key === "Enter" && highlighted) {
+                event.preventDefault();
+                onChange(highlighted);
+                setOpen(false);
+                return;
+            }
+            if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey || !/\p{L}/u.test(event.key)) return;
+            event.preventDefault();
+            const now = Date.now();
+            const prefix = now - search.current.at < 1000 ? search.current.text + event.key.toLocaleLowerCase() : event.key.toLocaleLowerCase();
+            search.current = { text: prefix, at: now };
+            const match = options.find((option) => option.label.toLocaleLowerCase().startsWith(prefix));
+            if (match) {
+                setHighlighted(match.value);
+                optionRefs.current.get(match.value)?.scrollIntoView({ block: "nearest" });
+            }
+        }
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [typeAhead, open, highlighted, onChange, options]);
 
     useEffect(() => {
         function handleClick(e: MouseEvent) {
@@ -55,7 +88,13 @@ function Dropdown({ label, icon, value, displayValue, options, onChange, disable
         <div ref={ref} className="relative">
             <label className="label">{label}</label>
             <button
-                onClick={() => !disabled && setOpen(!open)}
+                onClick={() => {
+                    if (disabled) return;
+                    search.current = { text: "", at: 0 };
+                    setHighlighted(null);
+                    setOpen(!open);
+                }}
+                aria-expanded={open}
                 disabled={disabled}
                 className="select-trigger"
             >
@@ -71,13 +110,14 @@ function Dropdown({ label, icon, value, displayValue, options, onChange, disable
                     {options.map((opt) => (
                         <button
                             key={opt.value}
+                            ref={(element) => { if (element) optionRefs.current.set(opt.value, element); else optionRefs.current.delete(opt.value); }}
                             onClick={() => {
                                 onChange(opt.value);
                                 setOpen(false);
                             }}
                             className={`
                 w-full text-left px-3 py-2.5 text-sm transition-colors
-                ${opt.value === value
+                ${(highlighted ? opt.value === highlighted : opt.value === value)
                                     ? "bg-accent-500/10 text-accent-300"
                                     : "text-surface-200 hover:bg-surface-800/60"
                                 }
@@ -184,7 +224,18 @@ export default function ModelSelector({
                 }
                 options={languageOptions}
                 onChange={onLanguageChange}
+                typeAhead
             />
+
+            {currentModel?.endsWith(".en") && selectedLanguage !== "en" && (
+                <p className="text-xs text-warning-400" role="alert">
+                    This model only supports English. Select English or choose a multilingual model for this language or auto-detection.
+                </p>
+            )}
+
+            {selectedTask === "translate" && selectedModel && !selectedModel.translation_support && (
+                <p className="text-xs text-warning-400" role="alert">This model does not support translation. Choose a multilingual model such as Small or Large v3.</p>
+            )}
 
             {/* Task Selector */}
             <Dropdown

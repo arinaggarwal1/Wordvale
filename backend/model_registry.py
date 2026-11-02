@@ -162,7 +162,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "relative_speed": 16,
         "multilingual_support": True,
         "english_only_variant": None,
-        "translation_support": True,
+        "translation_support": False,
         "recommended_use_case": "Fast with near-large accuracy. Recommended default.",
         "accuracy_tier": "high",
         "ggml_filename": "ggml-large-v3-turbo.bin",

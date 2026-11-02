@@ -347,6 +347,12 @@ This does two things:
 npm run dist:mac
 ```
 
+## Manage models
+
+Open **Manage models** in the transcription view to compare the available models, download them for offline use, select the active model, and remove downloaded files. Downloads run in the background while you navigate the app; the Models page shows progress and allows cancellation. Incomplete downloads are discarded. Removing a model does not delete recordings or transcripts.
+
+Large v3 Turbo is intended for transcription and is not trained for speech translation. Choose a model with translation support when using Translate to English.
+
 ## GitHub Releases
 
 The workflow at `.github/workflows/release-dmg.yml` builds an Apple silicon macOS DMG when a version tag is pushed. It publishes prerelease tags such as `v0.1.0-alpha` as GitHub prereleases. Set the same version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` before tagging.

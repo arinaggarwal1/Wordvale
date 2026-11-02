@@ -10,6 +10,7 @@ export interface WhisperModel {
     display_name: string;
     parameter_count: string;
     parameter_count_raw: number;
+    disk_size_mb?: number;
     estimated_vram_gb: number;
     relative_speed: number;
     multilingual_support: boolean;
@@ -22,7 +23,7 @@ export interface WhisperModel {
 /* ─── System Info ─── */
 
 export interface SystemInfo {
-    gpu_available: boolean;
+    gpu_available: boolean | null;
     gpu_name: string | null;
     gpu_vram_total_gb: number;
     gpu_vram_used_gb?: number;
@@ -57,6 +58,8 @@ export interface QueueItem {
     result?: TranscriptionResult;
     error?: string;
     addedAt: number;
+    savedViews?: TranscriptView[];
+    saveError?: string;
 }
 
 export interface TranscriptionSegment {
@@ -93,6 +96,7 @@ export interface TranscriptionResult {
     segments: TranscriptionSegment[];
     language: string;
     duration_seconds: number;
+    requested_language?: string;
     file: string;
     file_path: string;
     task?: "transcribe" | "translate";
@@ -105,18 +109,14 @@ export interface TranscriptionResult {
 export interface AdvancedSettings {
     threads: number;
     wordTimestamps: boolean;
-    forceCpu: boolean;
     verboseLogging: boolean;
-    autoDetectLanguage: boolean;
     autoSaveOutput: boolean;
 }
 
 export const DEFAULT_SETTINGS: AdvancedSettings = {
     threads: 4,
     wordTimestamps: false,
-    forceCpu: false,
     verboseLogging: false,
-    autoDetectLanguage: true,
     autoSaveOutput: false,
 };
 
@@ -129,7 +129,7 @@ export interface BackendCommand {
 }
 
 export interface BackendResponse {
-    type: "response" | "progress" | "error" | "ready";
+    type: "response" | "progress" | "error" | "ready" | "model_download";
     id?: string;
     data: Record<string, unknown>;
 }
@@ -152,6 +152,13 @@ export interface DownloadedModelInfo {
     size_bytes: number;
     size_mb: number;
     recommended_use_case: string;
+}
+
+export interface ModelDownload {
+    model: string;
+    downloaded: number;
+    total: number | null;
+    cancelling?: boolean;
 }
 
 export interface ModelStorageInfo {

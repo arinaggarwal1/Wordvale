@@ -22,6 +22,8 @@ import type {
 
 interface TranscriptionPanelProps {
     result: TranscriptionResult | null;
+    selectedFile?: string;
+    selectedStatus?: "pending" | "processing" | "completed" | "failed";
     progress: ProgressUpdate | null;
     isTranscribing: boolean;
     emptyStateMode?: "idle" | "select";
@@ -42,6 +44,8 @@ function formatTimestamp(seconds: number): string {
 
 export default function TranscriptionPanel({
     result,
+    selectedFile,
+    selectedStatus,
     progress,
     isTranscribing,
     emptyStateMode = "idle",
@@ -188,7 +192,12 @@ export default function TranscriptionPanel({
                         <div className="w-14 h-14 rounded-2xl bg-surface-800/60 flex items-center justify-center mb-4">
                             <FileText className="w-6 h-6 text-surface-500" />
                         </div>
-                        {emptyStateMode === "select" ? (
+                        {selectedFile && selectedStatus && selectedStatus !== "processing" ? (
+                            <>
+                                <p className="text-sm text-surface-400 mb-1">{selectedFile}</p>
+                                <p className="text-xs text-surface-500">{selectedStatus === "failed" ? "This file failed. Retry it from the queue." : "This file has not been transcribed yet."}</p>
+                            </>
+                        ) : emptyStateMode === "select" ? (
                             <>
                                 <p className="text-sm text-surface-400 mb-1">Select a transcript</p>
                                 <p className="text-xs text-surface-500">
@@ -216,6 +225,7 @@ export default function TranscriptionPanel({
                 ) : result ? (
                     /* Result content */
                     <div className="animate-fade-in">
+                        <p className="text-xs text-surface-500 mb-3 break-words">{selectedFile || result.file}</p>
                         {activeTab === "transcript" && (
                             <div className="prose prose-invert max-w-none">
                                 <p className="text-sm leading-relaxed text-surface-200 whitespace-pre-wrap font-sans">
@@ -224,7 +234,7 @@ export default function TranscriptionPanel({
                                 {selectedTranscript?.language && (
                                     <div className="mt-4 pt-3 border-t border-surface-800/50">
                                         <span className="text-xs text-surface-500">
-                                            {selectedTranscriptView === "english" && hasTranslation ? "Translated from" : "Detected language"}:{" "}
+                                            {selectedTranscriptView === "english" && hasTranslation ? "Translated from" : result.requested_language && result.requested_language !== "auto" ? "Selected language" : "Detected language"}:{" "}
                                             <span className="text-surface-300">{selectedTranscript.language}</span>
                                             {" · "}
                                             Processed in <span className="text-accent-400">{result.duration_seconds}s</span>

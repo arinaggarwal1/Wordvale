@@ -13,6 +13,7 @@ import type {
     BackendDebugEntry,
     BackendResponse,
     ModelStorageInfo,
+    ModelDownload,
     ProgressUpdate,
     QueueItem,
     QueueItemStatus,
@@ -30,9 +31,12 @@ interface UseWhisperReturn {
     isBackendReady: boolean;
     isModelLoading: boolean;
     isTranscribing: boolean;
+    isStopping: boolean;
     currentModel: string | null;
     systemInfo: SystemInfo | null;
     modelStorage: ModelStorageInfo | null;
+    modelDownload: ModelDownload | null;
+    modelDownloadError: { model: string; message: string } | null;
     models: WhisperModel[];
     queue: QueueItem[];
     activeResult: TranscriptionResult | null;
@@ -42,7 +46,9 @@ interface UseWhisperReturn {
     isUsingMockBackend: boolean;
 
     // Actions
-    loadModel: (modelName: string, forceCpu?: boolean) => Promise<void>;
+    loadModel: (modelName: string) => Promise<boolean>;
+    downloadModel: (modelName: string) => Promise<void>;
+    cancelModelDownload: () => Promise<void>;
     transcribeFile: (
         filePath: string,
         settings: AdvancedSettings,
@@ -53,7 +59,9 @@ interface UseWhisperReturn {
     addToQueue: (files: { path: string; size: number }[]) => void;
     removeFromQueue: (id: string) => void;
     reorderQueue: (fromIndex: number, toIndex: number) => void;
-    processQueue: (settings: AdvancedSettings, language: string, task: string) => Promise<void>;
+    retryQueueItem: (id: string) => void;
+    markSaved: (id: string, view: "original" | "english") => void;
+    processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string) => Promise<void>;
     clearError: () => void;
     getSystemInfo: () => Promise<void>;
     getModelStorage: () => Promise<void>;
@@ -71,9 +79,13 @@ export function useWhisper(): UseWhisperReturn {
     const [isBackendReady, setIsBackendReady] = useState(false);
     const [isModelLoading, setIsModelLoading] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const [isStopping, setIsStopping] = useState(false);
     const [currentModel, setCurrentModel] = useState<string | null>(null);
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [modelStorage, setModelStorage] = useState<ModelStorageInfo | null>(null);
+    const [modelDownload, setModelDownload] = useState<ModelDownload | null>(null);
+    const [modelDownloadError, setModelDownloadError] = useState<{ model: string; message: string } | null>(null);
+    const modelOperation = useRef(false);
     const [models, setModels] = useState<WhisperModel[]>([]);
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [activeResult, setActiveResult] = useState<TranscriptionResult | null>(null);
@@ -128,6 +140,10 @@ export function useWhisper(): UseWhisperReturn {
             return;
         }
 
+        if (response.type === "model_download") {
+            setModelDownload((previous) => ({ ...response.data as unknown as ModelDownload, cancelling: previous?.cancelling }));
+            return;
+        }
         if (response.type === "progress") {
             setProgress(response.data as unknown as ProgressUpdate);
             return;
@@ -346,26 +362,45 @@ export function useWhisper(): UseWhisperReturn {
         }
     }
 
-    async function loadModel(modelName: string, forceCpu = false) {
+    async function runModelOperation(modelName: string, activate: boolean): Promise<boolean> {
+        if (modelOperation.current) return false;
+        modelOperation.current = true;
         setIsModelLoading(true);
+        setModelDownloadError(null);
         setError(null);
         try {
-            const result = await sendCommand("load_model", {
-                model: modelName,
-                force_cpu: forceCpu,
-            });
-            setCurrentModel(modelName);
-            if (result.device) {
-                setSystemInfo((prev) =>
-                    prev ? { ...prev, current_model: modelName, model_loaded: true } : prev
-                );
+            const result = await sendCommand(activate ? "load_model" : "download_model", { model: modelName });
+            if (result.status === "cancelled") return false;
+            if (activate) {
+                setCurrentModel(modelName);
+                setSystemInfo((prev) => prev ? { ...prev, current_model: modelName, model_loaded: true } : prev);
             }
             await getModelStorage();
+            return true;
         } catch (err) {
-            setError((err as Error).message);
+            const message = (err as Error).message;
+            setModelDownloadError({ model: modelName, message });
+            setError(message);
+            return false;
         } finally {
+            modelOperation.current = false;
+            setModelDownload(null);
             setIsModelLoading(false);
         }
+    }
+
+    async function loadModel(modelName: string) {
+        return runModelOperation(modelName, true);
+    }
+
+    async function downloadModel(modelName: string) {
+        await runModelOperation(modelName, false);
+    }
+
+    async function cancelModelDownload() {
+        setModelDownload((previous) => previous ? { ...previous, cancelling: true } : previous);
+        try { await sendCommand("cancel_model_download"); }
+        catch (err) { setError(`Could not cancel download: ${(err as Error).message}`); }
     }
 
     async function transcribeFile(
@@ -374,7 +409,6 @@ export function useWhisper(): UseWhisperReturn {
         language: string,
         task: string
     ) {
-        setIsTranscribing(true);
         setProgress(null);
         setError(null);
         setActiveResult(null);
@@ -386,26 +420,27 @@ export function useWhisper(): UseWhisperReturn {
                 threads: settings.threads,
                 word_timestamps: settings.wordTimestamps,
             });
-            const transcriptionResult = result as unknown as TranscriptionResult;
+            if (result.status === "cancelled") throw new Error("Transcription cancelled");
+            const transcriptionResult = { ...result, requested_language: language } as unknown as TranscriptionResult;
             setActiveResult(transcriptionResult);
             return transcriptionResult;
         } catch (err) {
-            setError((err as Error).message);
+            if (!isCancellingQueueRef.current) setError((err as Error).message);
             throw err;
         } finally {
-            setIsTranscribing(false);
             setProgress(null);
         }
     }
 
     async function cancelTranscription() {
+        if (isCancellingQueueRef.current) return;
         isCancellingQueueRef.current = true;
+        setIsStopping(true);
         try {
             await sendCommand("cancel_transcription");
-        } catch {
-            // Ignore cancel errors
+        } catch (err) {
+            setError(`Could not stop transcription: ${(err as Error).message}`);
         }
-        setIsTranscribing(false);
     }
 
     async function deleteModel(modelName: string) {
@@ -434,6 +469,12 @@ export function useWhisper(): UseWhisperReturn {
             const result = await sendCommand("delete_all_models");
             if (result.status === "error") {
                 throw new Error(result.error as string);
+            }
+            if (result.status === "partial") {
+                await Promise.all([getSystemInfo(), getModelStorage()]);
+                const deleted = result.deleted_models as string[];
+                if (currentModel && deleted.includes(currentModel)) setCurrentModel(null);
+                throw new Error("Some models could not be removed. Refresh the list and try again.");
             }
             setCurrentModel(null);
             setSystemInfo((prev) =>
@@ -468,6 +509,19 @@ export function useWhisper(): UseWhisperReturn {
 
     function removeFromQueue(id: string) {
         setQueue((prev) => prev.filter((item) => item.id !== id));
+    }
+
+    function retryQueueItem(id: string) {
+        setQueue((prev) => prev.map((item) => item.id === id && item.status === "failed" ? { ...item, status: "pending", progress: 0, error: undefined } : item));
+    }
+
+    function markSaved(id: string, view: "original" | "english") {
+        setQueue((prev) => prev.map((item) => {
+            if (item.id !== id) return item;
+            const savedViews = Array.from(new Set([...(item.savedViews || []), view]));
+            const allSaved = savedViews.includes("original") && (!item.result?.english || savedViews.includes("english"));
+            return { ...item, savedViews, saveError: allSaved ? undefined : item.saveError };
+        }));
     }
 
     function reorderQueue(fromIndex: number, toIndex: number) {
@@ -512,11 +566,13 @@ export function useWhisper(): UseWhisperReturn {
     async function processQueue(
         settings: AdvancedSettings,
         language: string,
-        task: string
+        task: string,
+        outputDir?: string
     ) {
         if (isProcessingQueueRef.current) return;
 
         isProcessingQueueRef.current = true;
+        setIsTranscribing(true);
         isCancellingQueueRef.current = false;
         setError(null);
 
@@ -533,10 +589,22 @@ export function useWhisper(): UseWhisperReturn {
 
                 try {
                     const result = await transcribeFile(nextItem.filePath, settings, language, task);
+                    let savedViews: ("original" | "english")[] = [];
+                    let saveError: string | undefined;
+                    if (outputDir) {
+                        try {
+                            savedViews = await autoSaveResult(outputDir, result);
+                        } catch (err) {
+                            saveError = `Auto-save failed: ${String(err)}. Save the transcript manually.`;
+                            setError(saveError);
+                        }
+                    }
                     updateQueueItem(nextItem.id, {
                         status: "completed",
                         progress: 100,
                         result,
+                        savedViews,
+                        saveError,
                         error: undefined,
                     });
                 } catch (err) {
@@ -558,7 +626,9 @@ export function useWhisper(): UseWhisperReturn {
             }
         } finally {
             isProcessingQueueRef.current = false;
+            setIsTranscribing(false);
             isCancellingQueueRef.current = false;
+            setIsStopping(false);
         }
     }
 
@@ -570,9 +640,12 @@ export function useWhisper(): UseWhisperReturn {
         isBackendReady,
         isModelLoading,
         isTranscribing,
+        isStopping,
         currentModel,
         systemInfo,
         modelStorage,
+        modelDownload,
+        modelDownloadError,
         models,
         queue,
         activeResult,
@@ -581,11 +654,15 @@ export function useWhisper(): UseWhisperReturn {
         backendLogs,
         isUsingMockBackend,
         loadModel,
+        downloadModel,
+        cancelModelDownload,
         transcribeFile,
         cancelTranscription,
         addToQueue,
         removeFromQueue,
         reorderQueue,
+        retryQueueItem,
+        markSaved,
         processQueue,
         clearError,
         getSystemInfo,
@@ -594,6 +671,24 @@ export function useWhisper(): UseWhisperReturn {
         deleteAllModels,
         setActiveResult,
     };
+}
+
+async function autoSaveResult(directory: string, result: TranscriptionResult): Promise<("original" | "english")[]> {
+    const { invoke } = await import("@tauri-apps/api/tauri");
+    const base = result.file.replace(/\.[^.]+$/, "") || "transcript";
+    const translated = Boolean(result.original && result.english);
+    const variants: { view: "original" | "english"; filename: string; text: string }[] = translated
+        ? [
+            { view: "original", filename: `${base}_original.txt`, text: result.original!.text },
+            { view: "english", filename: `${base}_english.txt`, text: result.english!.text },
+        ]
+        : [{ view: "original", filename: `${base}.txt`, text: result.text }];
+    const saved: ("original" | "english")[] = [];
+    for (const variant of variants) {
+        await invoke("save_transcript_copy", { directory, filename: variant.filename, content: variant.text });
+        saved.push(variant.view);
+    }
+    return saved;
 }
 
 // ─── Mock command handler for dev mode ───
@@ -636,6 +731,12 @@ function handleMockCommand(
                 total_size_mb: 0,
                 active_model: null,
             });
+            break;
+        case "download_model":
+            resolve({ status: "downloaded", model: _params.model });
+            break;
+        case "cancel_model_download":
+            resolve({ status: "cancelling" });
             break;
         case "load_model":
             resolve({ status: "loaded", model: _params.model, device: "cpu" });
@@ -683,6 +784,6 @@ function getDefaultModels(): WhisperModel[] {
         { name: "medium", display_name: "Medium", parameter_count: "769M", parameter_count_raw: 769000000, estimated_vram_gb: 2.1, relative_speed: 8, multilingual_support: true, english_only_variant: "medium.en", translation_support: true, recommended_use_case: "High accuracy for most languages", accuracy_tier: "high" },
         { name: "medium.en", display_name: "Medium (English)", parameter_count: "769M", parameter_count_raw: 769000000, estimated_vram_gb: 2.1, relative_speed: 8, multilingual_support: false, english_only_variant: null, translation_support: false, recommended_use_case: "Professional-grade English", accuracy_tier: "high" },
         { name: "large-v3", display_name: "Large v3", parameter_count: "1550M", parameter_count_raw: 1550000000, estimated_vram_gb: 3.9, relative_speed: 4, multilingual_support: true, english_only_variant: null, translation_support: true, recommended_use_case: "Maximum accuracy across all languages", accuracy_tier: "very-high" },
-        { name: "large-v3-turbo", display_name: "Large v3 Turbo", parameter_count: "809M", parameter_count_raw: 809000000, estimated_vram_gb: 2.0, relative_speed: 16, multilingual_support: true, english_only_variant: null, translation_support: true, recommended_use_case: "Fast with near-large accuracy. Recommended.", accuracy_tier: "high" },
+        { name: "large-v3-turbo", display_name: "Large v3 Turbo", parameter_count: "809M", parameter_count_raw: 809000000, estimated_vram_gb: 2.0, relative_speed: 16, multilingual_support: true, english_only_variant: null, translation_support: false, recommended_use_case: "Fast with near-large accuracy. Recommended.", accuracy_tier: "high" },
     ];
 }

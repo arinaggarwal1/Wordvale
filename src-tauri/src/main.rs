@@ -9,7 +9,7 @@
     windows_subsystem = "windows"
 )]
 
-use std::{fs, path::Path, process::Command};
+use std::{fs, io::Write, path::Path, process::Command};
 
 #[derive(serde::Serialize)]
 struct FileMetadata {
@@ -49,9 +49,35 @@ fn open_in_finder(path: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn save_transcript_copy(directory: String, filename: String, content: String) -> Result<String, String> {
+    let dir = Path::new(&directory);
+    if !dir.is_dir() || Path::new(&filename).file_name().and_then(|v| v.to_str()) != Some(filename.as_str()) {
+        return Err("Invalid output folder or file name".into());
+    }
+    let stem = filename.strip_suffix(".txt").unwrap_or(&filename);
+    for index in 0..10000 {
+        let name = if index == 0 { format!("{stem}.txt") } else { format!("{stem} ({index}).txt") };
+        let path = dir.join(name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(content.as_bytes()) {
+                    drop(file);
+                    let _ = fs::remove_file(&path);
+                    return Err(error.to_string());
+                }
+                return Ok(path.to_string_lossy().into_owned());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err("Too many files with this name".into())
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_file_metadata, open_in_finder])
+        .invoke_handler(tauri::generate_handler![get_file_metadata, open_in_finder, save_transcript_copy])
         .run(tauri::generate_context!())
         .expect("error while running Wordvale");
 }

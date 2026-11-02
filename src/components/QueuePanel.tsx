@@ -13,6 +13,7 @@ import {
     ChevronDown,
     List,
     Sparkles,
+    RotateCcw,
 } from "lucide-react";
 import type { QueueItem, QueueItemStatus } from "../types/models";
 import { estimateTime, formatDuration } from "../constants";
@@ -20,6 +21,7 @@ import { estimateTime, formatDuration } from "../constants";
 interface QueuePanelProps {
     queue: QueueItem[];
     onRemove: (id: string) => void;
+    onRetry: (id: string) => void;
     onReorder: (fromIndex: number, toIndex: number) => void;
     currentModel: string | null;
     onSelect: (id: string | null) => void;
@@ -56,6 +58,7 @@ const statusConfig: Record<
 export default function QueuePanel({
     queue,
     onRemove,
+    onRetry,
     onReorder,
     currentModel,
     onSelect,
@@ -130,6 +133,7 @@ export default function QueuePanel({
                                     <span>Est. {formatDuration(estimateTime(item.fileSizeMb, currentModel))}</span>
                                     <span>•</span>
                                     <span className={status.color}>{status.label}</span>
+                                    {item.result && (item.savedViews || []).includes("original") && (!item.result.english || (item.savedViews || []).includes("english")) && <><span>•</span><span className="text-success-400">Saved</span></>}
                                     {pendingPosition !== undefined && (
                                         <>
                                             <span>•</span>
@@ -164,6 +168,7 @@ export default function QueuePanel({
                                     </>
                                 )}
 
+                                {item.status === "failed" && <button onClick={() => onRetry(item.id)} className="p-1.5 rounded-lg text-surface-400 hover:text-surface-100" title="Retry file" aria-label={`Retry ${item.fileName}`}><RotateCcw className="w-3.5 h-3.5" /></button>}
                                 <button
                                     onClick={() => onRemove(item.id)}
                                     disabled={disableRemove}
@@ -186,6 +191,7 @@ export default function QueuePanel({
                             </div>
                         )}
 
+                        {item.saveError && <p role="alert" className="mt-2 text-[11px] text-danger-400 break-words">{item.saveError}</p>}
                         {item.status === "failed" && item.error && (
                             <p className="mt-2 text-[11px] text-danger-400 break-words">{item.error}</p>
                         )}

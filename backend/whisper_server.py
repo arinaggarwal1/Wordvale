@@ -20,7 +20,6 @@ Commands:
 
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -229,6 +228,9 @@ class WhisperServer:
         self._output_lock = threading.Lock()
         self._active_process: Optional[subprocess.Popen] = None
         self._cancel_event = threading.Event()
+        self._transcription_thread: Optional[threading.Thread] = None
+        self._download_thread: Optional[threading.Thread] = None
+        self._download_cancel = threading.Event()
         self._ffmpeg_path = self._resolve_ffmpeg_path()
 
     def _send_response(self, response: Dict[str, Any]) -> None:
@@ -243,10 +245,8 @@ class WhisperServer:
         self._send_response({"type": "progress", "data": data})
 
     def _detect_device(self) -> str:
-        """Detect if Metal is available (Apple Silicon)."""
-        if platform.system() == "Darwin" and platform.machine() == "arm64":
-            return "metal"
-        return "cpu"
+        """The CLI does not report a verified execution device through this API."""
+        return "unknown"
 
     def _get_model_path(self, model_name: str) -> str:
         """Get the full path to a GGML model file."""
@@ -281,51 +281,61 @@ class WhisperServer:
         return os.path.exists(self._get_model_path(model_name))
 
     def _download_model(self, model_name: str) -> Dict[str, Any]:
-        """Download a GGML model from Hugging Face."""
+        """Download to a temporary file and publish only a complete GGML model."""
+        if model_name not in MODEL_REGISTRY:
+            return {"status": "error", "error": f"Unknown model: {model_name}"}
         if self._is_model_downloaded(model_name):
             return {"status": "already_exists", "model": model_name}
-
-        target_path = self._get_model_path(model_name)
+        target = self._get_model_path(model_name)
         url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model_name}.bin"
-        
-        self._send_progress({
-            "type": "progress",
-            "stage": "downloading_model",
-            "percent": 0,
-            "message": f"Downloading model {model_name}...",
-        })
-
+        temp_path = None
         try:
-            def report_progress(count, block_size, total_size):
-                percent = int(count * block_size * 100 / total_size)
-                # Throttle updates to avoid flooding
-                if percent % 5 == 0:
-                     self._send_progress({
-                        "type": "progress",
-                        "stage": "downloading_model",
-                        "percent": percent,
-                        "message": f"Downloading {model_name} ({percent}%)...",
-                    })
-
-            urllib.request.urlretrieve(url, target_path, reporthook=report_progress)
-
-            if self._is_model_downloaded(model_name):
-                return {"status": "downloaded", "model": model_name, "path": target_path}
-            else:
-                return {"status": "error", "error": "Download completed but file missing"}
-
-        except Exception as e:
-            if os.path.exists(target_path):
-                os.unlink(target_path)
-            return {"status": "error", "error": str(e)}
+            with tempfile.NamedTemporaryFile(prefix=".whisper-download-", dir=MODELS_DIR, delete=False) as output:
+                temp_path = output.name
+                self._send_response({"type": "model_download", "data": {"model": model_name, "downloaded": 0, "total": None}})
+                with urllib.request.urlopen(url, timeout=30) as response:
+                    header = response.headers.get("Content-Length")
+                    total = int(header) if header and header.isdigit() and int(header) > 0 else None
+                    downloaded = 0
+                    last_update = 0.0
+                    while True:
+                        if self._download_cancel.is_set():
+                            return {"status": "cancelled", "model": model_name}
+                        chunk = response.read(1024 * 256)
+                        if not chunk:
+                            break
+                        output.write(chunk)
+                        downloaded += len(chunk)
+                        if total is not None and downloaded > total:
+                            raise ValueError("Download exceeded the expected size.")
+                        if time.monotonic() - last_update >= 0.2:
+                            self._send_response({"type": "model_download", "data": {"model": model_name, "downloaded": downloaded, "total": total}})
+                            last_update = time.monotonic()
+                    if self._download_cancel.is_set():
+                        return {"status": "cancelled", "model": model_name}
+                    if downloaded < 1024 or (total is not None and downloaded != total):
+                        raise ValueError("The download was incomplete. Please retry.")
+            with open(temp_path, "rb") as model_file:
+                if model_file.read(4) != b"lmgg":
+                    raise ValueError("Downloaded file is not a valid Whisper GGML model.")
+            if self._download_cancel.is_set():
+                return {"status": "cancelled", "model": model_name}
+            os.replace(temp_path, target)
+            temp_path = None
+            return {"status": "downloaded", "model": model_name, "path": target}
+        except Exception as exc:
+            return {"status": "cancelled", "model": model_name} if self._download_cancel.is_set() else {"status": "error", "error": str(exc), "model": model_name}
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
 
     def _get_system_info(self) -> Dict[str, Any]:
         """Return system hardware information."""
         device = self._detect_device()
         info: Dict[str, Any] = {
             "device": device,
-            "gpu_available": device == "metal",
-            "gpu_name": "Apple Silicon (Metal)" if device == "metal" else None,
+            "gpu_available": None,
+            "gpu_name": None,
             "gpu_vram_total_gb": 0,
             "force_cpu": False,
             "current_model": self._current_model,
@@ -342,9 +352,6 @@ class WhisperServer:
             info["ram_available_gb"] = round(
                 psutil.virtual_memory().available / (1024**3), 2
             )
-            if device == "metal":
-                # Metal shares system RAM
-                info["gpu_vram_total_gb"] = info["ram_total_gb"]
         except ImportError:
             info["cpu_count"] = os.cpu_count() or 1
             info["ram_total_gb"] = 0
@@ -376,11 +383,13 @@ class WhisperServer:
         if model_name not in MODEL_REGISTRY:
             return {"status": "error", "error": f"Unknown model: {model_name}"}
 
-        if self._active_process is not None:
-            return {"status": "error", "error": "Cannot delete models while transcription is in progress."}
+        if (self._transcription_thread and self._transcription_thread.is_alive()) or (self._download_thread and self._download_thread.is_alive()):
+            return {"status": "error", "error": "Cannot delete models while transcription or a model download is in progress."}
 
         path = self._get_model_path(model_name)
         if not os.path.exists(path):
+            if self._current_model == model_name:
+                self._current_model = None
             return {"status": "not_found", "model": model_name}
 
         try:
@@ -393,8 +402,8 @@ class WhisperServer:
 
     def _delete_all_models(self) -> Dict[str, Any]:
         """Delete all downloaded models from disk."""
-        if self._active_process is not None:
-            return {"status": "error", "error": "Cannot delete models while transcription is in progress."}
+        if (self._transcription_thread and self._transcription_thread.is_alive()) or (self._download_thread and self._download_thread.is_alive()):
+            return {"status": "error", "error": "Cannot delete models while transcription or a model download is in progress."}
 
         deleted: List[str] = []
         errors: List[Dict[str, str]] = []
@@ -478,10 +487,25 @@ class WhisperServer:
             "-c:a", "pcm_s16le",
             wav_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
-        if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg conversion failed: {result.stderr.strip()}")
-        return wav_path
+        self._active_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            if self._cancel_event.is_set():
+                self._active_process.terminate()
+            _, stderr = self._active_process.communicate(timeout=3600)
+            if self._cancel_event.is_set():
+                raise InterruptedError("Transcription cancelled")
+            if self._active_process.returncode != 0:
+                raise RuntimeError(f"ffmpeg conversion failed: {stderr.strip()}")
+            return wav_path
+        except Exception:
+            if self._active_process.poll() is None:
+                self._active_process.kill()
+                self._active_process.wait()
+            if os.path.exists(wav_path):
+                os.unlink(wav_path)
+            raise
+        finally:
+            self._active_process = None
 
     def _run_whisper_cli(
         self,
@@ -536,6 +560,9 @@ class WhisperServer:
                 bufsize=1,
             )
 
+            if self._cancel_event.is_set():
+                self._active_process.terminate()
+
             stderr_buffer = []
             stdout_buffer = []
 
@@ -583,6 +610,8 @@ class WhisperServer:
             stderr_output = "\n".join(stderr_buffer)
             self._active_process = None
 
+            if self._cancel_event.is_set():
+                return {"status": "cancelled"}
             if returncode != 0:
                 return {
                     "status": "error",
@@ -627,20 +656,12 @@ class WhisperServer:
         if not os.path.exists(WHISPER_CLI):
             return {"status": "error", "error": "whisper-cli not found. whisper.cpp may not be built."}
 
-        # Check if model is downloaded, auto-download if not
+        if task == "translate" and not MODEL_REGISTRY.get(model_name, {}).get("translation_support", False):
+            return {"status": "error", "error": f"{model_name} does not support translation. Choose another model."}
         if not self._is_model_downloaded(model_name):
-            self._send_progress({
-                "type": "progress",
-                "stage": "downloading_model",
-                "percent": 5,
-                "message": f"Model {model_name} not found, downloading...",
-            })
-            dl_result = self._download_model(model_name)
-            if dl_result.get("status") == "error":
-                return dl_result
+            return {"status": "error", "error": f"Model {model_name} is not downloaded. Download it from Manage models."}
 
         model_path = self._get_model_path(model_name)
-        self._cancel_event.clear()
         start_time = time.time()
         wav_path = None
 
@@ -667,7 +688,7 @@ class WhisperServer:
                 threads=threads,
                 word_timestamps=word_timestamps,
                 progress_percent=20,
-                progress_message=f"Transcribing original audio with {model_name} on {self._detect_device().upper()}...",
+                progress_message=f"Transcribing original audio with {model_name}...",
                 file_name=file_name,
             )
             if original_run.get("status") != "completed":
@@ -734,6 +755,8 @@ class WhisperServer:
             result["status"] = "completed"
             return result
 
+        except InterruptedError:
+            return {"status": "cancelled"}
         except Exception as e:
             return {
                 "status": "error",
@@ -853,32 +876,21 @@ class WhisperServer:
                 result = self._get_model_storage()
 
             elif cmd == "load_model":
-                model_name = params.get("model", "base.en")
-                self._current_model = model_name
-
-                # Auto-download if needed
-                if not self._is_model_downloaded(model_name):
-                    dl = self._download_model(model_name)
-                    if dl.get("status") == "error":
-                        result = dl
-                    else:
-                        result = {
-                            "status": "loaded",
-                            "model": model_name,
-                            "device": self._detect_device(),
-                            "downloaded": True,
-                        }
+                model_name = params.get("model", "base")
+                dl = self._download_model(model_name)
+                if dl.get("status") in ("error", "cancelled"):
+                    result = dl
                 else:
-                    result = {
-                        "status": "loaded",
-                        "model": model_name,
-                        "device": self._detect_device(),
-                        "downloaded": False,
-                    }
+                    self._current_model = model_name
+                    result = {"status": "loaded", "model": model_name, "device": self._detect_device(), "downloaded": dl.get("status") == "downloaded"}
 
             elif cmd == "download_model":
                 model_name = params.get("model", "")
                 result = self._download_model(model_name)
+
+            elif cmd == "cancel_model_download":
+                self._download_cancel.set()
+                result = {"status": "cancelling"}
 
             elif cmd == "delete_model":
                 model_name = params.get("model", "")
@@ -941,8 +953,37 @@ class WhisperServer:
                     })
                     continue
 
-                response = self._handle_command(command)
-                self._send_response(response)
+                if command.get("command") in ("download_model", "load_model"):
+                    if self._download_thread and self._download_thread.is_alive():
+                        self._send_response({"type": "response", "id": command.get("id"), "data": {"status": "error", "error": "Another model operation is in progress."}})
+                        continue
+                    if self._transcription_thread and self._transcription_thread.is_alive():
+                        self._send_response({"type": "response", "id": command.get("id"), "data": {"status": "error", "error": "Wait for transcription to finish before changing models."}})
+                        continue
+                    self._download_cancel.clear()
+                    def run_download(request):
+                        response = self._handle_command(request)
+                        self._download_thread = None
+                        self._send_response(response)
+                    self._download_thread = threading.Thread(target=run_download, args=(command,), daemon=True)
+                    self._download_thread.start()
+                elif command.get("command") == "transcribe_file":
+                    if self._download_thread and self._download_thread.is_alive():
+                        self._send_response({"type": "response", "id": command.get("id"), "data": {"status": "error", "error": "Wait for the model download to finish."}})
+                        continue
+                    if self._transcription_thread and self._transcription_thread.is_alive():
+                        self._send_response({"type": "response", "id": command.get("id"), "data": {"status": "error", "error": "A transcription is already running."}})
+                        continue
+                    self._cancel_event.clear()
+                    def run_transcription(request):
+                        response = self._handle_command(request)
+                        self._transcription_thread = None
+                        self._send_response(response)
+                    self._transcription_thread = threading.Thread(target=run_transcription, args=(command,), daemon=True)
+                    self._transcription_thread.start()
+                else:
+                    response = self._handle_command(command)
+                    self._send_response(response)
 
             except KeyboardInterrupt:
                 break

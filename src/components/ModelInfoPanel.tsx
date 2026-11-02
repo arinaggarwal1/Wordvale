@@ -152,25 +152,7 @@ export default function ModelInfoPanel({
                             label="RAM"
                             value={`${systemInfo.ram_available_gb} / ${systemInfo.ram_total_gb} GB`}
                         />
-                        <StatRow
-                            icon={<Zap className="w-3.5 h-3.5" />}
-                            label="GPU"
-                            value={systemInfo.gpu_available ? (systemInfo.gpu_name || "Available") : "Not available"}
-                            accent={systemInfo.gpu_available}
-                        />
-                        {systemInfo.gpu_available && systemInfo.gpu_vram_total_gb > 0 && (
-                            <StatRow
-                                icon={<MemoryStick className="w-3.5 h-3.5" />}
-                                label="VRAM"
-                                value={`${systemInfo.gpu_vram_free_gb || 0} / ${systemInfo.gpu_vram_total_gb} GB`}
-                            />
-                        )}
-                        <StatRow
-                            icon={<Monitor className="w-3.5 h-3.5" />}
-                            label="Device"
-                            value={systemInfo.device.toUpperCase()}
-                            accent
-                        />
+                        <StatRow icon={<Monitor className="w-3.5 h-3.5" />} label="Execution device" value="Not verified" />
                         <StatRow
                             icon={<HardDrive className="w-3.5 h-3.5" />}
                             label="FFmpeg"
