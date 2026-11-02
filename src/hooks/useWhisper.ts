@@ -61,7 +61,7 @@ interface UseWhisperReturn {
     reorderQueue: (fromIndex: number, toIndex: number) => void;
     retryQueueItem: (id: string) => void;
     markSaved: (id: string, view: "original" | "english") => void;
-    processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string) => Promise<void>;
+    processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string, onlyId?: string) => Promise<void>;
     updateCommand: (command: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
     clearError: () => void;
     getSystemInfo: () => Promise<void>;
@@ -97,7 +97,7 @@ export function useWhisper(): UseWhisperReturn {
 
     // Backend process reference — holds a write function and kill function
     const backendProcess = useRef<{
-        write: (data: string) => void;
+        write: (data: string) => Promise<void>;
         kill: () => void;
     } | null>(null);
 
@@ -180,11 +180,20 @@ export function useWhisper(): UseWhisperReturn {
                 pendingRequests.current.set(id, { resolve, reject });
 
                 if (backendProcess.current) {
-                    backendProcess.current.write(msg + "\n");
+                    backendProcess.current.write(msg + "\n").catch((err: Error) => {
+                        const pending = pendingRequests.current.get(id);
+                        if (pending) {
+                            pendingRequests.current.delete(id);
+                            pending.reject(new Error(`Could not send to the backend: ${err.message}`));
+                        }
+                    });
                 } else if (allowMockBackend.current) {
                     pushBackendLog("warn", `Backend unavailable, returning mock response for "${command}".`);
                     setTimeout(() => {
-                        handleMockCommand(id, command, params, resolve);
+                        handleMockCommand(id, command, params, (data) => {
+                            pendingRequests.current.delete(id);
+                            resolve(data);
+                        });
                     }, 500);
                 } else {
                     pendingRequests.current.delete(id);
@@ -204,120 +213,107 @@ export function useWhisper(): UseWhisperReturn {
         [pushBackendLog]
     );
 
-    // Start the backend process
+    // Start the backend process. Each effect owns its own child, including when
+    // React StrictMode or hot reload tears down an in-flight startup.
     useEffect(() => {
+        let disposed = false;
+        let readyReceived = false;
+        let closed = false;
+        let ownedProcess: typeof backendProcess.current = null;
+
+        function markReady() {
+            if (disposed || closed || !readyReceived || !ownedProcess || backendProcess.current !== ownedProcess) return;
+            setIsBackendReady(true);
+            setError((previous) => previous === "Backend is not running. Open Backend Debug for startup details." ? null : previous);
+        }
+
         async function startBackend() {
             if (IS_TAURI) {
                 try {
                     const { Command } = await import("@tauri-apps/api/shell");
-                    pushBackendLog(
-                        "info",
-                        `Starting backend in ${import.meta.env.PROD ? "production" : "development"} mode.`
-                    );
-
-                    let cmd;
-                    if (import.meta.env.PROD) {
-                        // Production Bundle: Use the standalone sidecar binary
-                        pushBackendLog("info", 'Launching Tauri sidecar "binaries/whisper-backend".');
-                        cmd = Command.sidecar("binaries/whisper-backend");
-                    } else {
-                        // Development: Use the shell script to run python from source
-                        // This allows for hot-reloading backend changes without rebuilding the binary
-                        pushBackendLog("info", 'Launching development backend via "bash ../backend/launch_backend.sh".');
-                        cmd = new Command("bash", ["../backend/launch_backend.sh"]);
-                    }
+                    if (disposed) return;
+                    pushBackendLog("info", `Starting backend in ${import.meta.env.PROD ? "production" : "development"} mode.`);
+                    const cmd = import.meta.env.PROD
+                        ? Command.sidecar("binaries/whisper-backend")
+                        : new Command("bash", ["../backend/launch_backend.sh"]);
+                    pushBackendLog("info", import.meta.env.PROD ? "Launching backend sidecar." : "Launching development backend.");
 
                     cmd.stdout.on("data", (line: string) => {
+                        if (disposed || closed) return;
                         const trimmed = line.trim();
                         if (!trimmed) return;
                         pushBackendLog("info", `[stdout] ${trimmed}`);
-
                         try {
                             const response = JSON.parse(trimmed) as BackendResponse;
-                            handleBackendMessage(response);
+                            if (response.type === "ready") {
+                                readyReceived = true;
+                                markReady();
+                            } else {
+                                handleBackendMessage(response);
+                            }
                         } catch {
-                            // Already logged above
+                            // Non-JSON output is retained in the debug log.
                         }
                     });
-
                     cmd.stderr.on("data", (line: string) => {
-                        const trimmed = line.trim();
-                        if (trimmed) {
-                            pushBackendLog("warn", `[stderr] ${trimmed}`);
-                        }
+                        if (!disposed && line.trim()) pushBackendLog("warn", `[stderr] ${line.trim()}`);
                     });
-
-
                     cmd.on("error", (err: Error) => {
+                        if (disposed) return;
                         pushBackendLog("error", `Backend process error: ${err.message}`);
                         setError("Backend process error: " + err.message);
                     });
-
                     cmd.on("close", (data: { code: number }) => {
+                        closed = true;
+                        if (disposed || !ownedProcess || backendProcess.current !== ownedProcess) return;
                         pushBackendLog("warn", `Backend process closed with code ${data.code}.`);
                         setIsBackendReady(false);
                         backendProcess.current = null;
+                        for (const pending of pendingRequests.current.values()) pending.reject(new Error("The backend stopped. Restart the app and try again."));
+                        pendingRequests.current.clear();
+                        setError("The backend stopped. Restart the app and try again.");
                     });
 
                     const child = await cmd.spawn();
+                    if (disposed || closed) {
+                        await child.kill().catch(() => {});
+                        if (closed && !disposed) throw new Error("Backend exited during startup.");
+                        return;
+                    }
+                    ownedProcess = {
+                        write: (data: string) => child.write(data),
+                        kill: () => { void child.kill().catch((err: Error) => pushBackendLog("error", `Backend kill error: ${err.message}`)); },
+                    };
+                    backendProcess.current = ownedProcess;
                     allowMockBackend.current = false;
                     setIsUsingMockBackend(false);
                     pushBackendLog("info", `Backend spawned successfully with PID ${child.pid}.`);
-
-                    backendProcess.current = {
-                        write: (data: string) => {
-                            child.write(data).catch((err: Error) => {
-                                pushBackendLog("error", `Backend write error: ${err.message}`);
-                            });
-                        },
-                        kill: () => {
-                            child.kill().catch((err: Error) => {
-                                pushBackendLog("error", `Backend kill error: ${err.message}`);
-                            });
-                        },
-                    };
+                    markReady();
                 } catch (err) {
-                    const errMsg = err instanceof Error
-                        ? err.message
-                        : (typeof err === 'object' && err !== null && 'message' in err)
-                            ? String((err as { message: unknown }).message)
-                            : (typeof err === 'string')
-                                ? err
-                                : JSON.stringify(err) ?? 'Unknown error';
-                    pushBackendLog("error", `Failed to start backend: ${errMsg}`);
-                    setError(`Failed to start backend: ${errMsg}`);
+                    if (disposed) return;
+                    const message = err instanceof Error ? err.message : String(err);
+                    pushBackendLog("error", `Failed to start backend: ${message}`);
+                    setError(`Failed to start backend: ${message}`);
                     setIsBackendReady(false);
-                    backendProcess.current = null;
                 }
-            } else {
-                // Dev mode — use mock backend
-                pushBackendLog("warn", "Running outside Tauri. Falling back to mock backend.");
-                initMockBackend();
+            } else if (!disposed) {
+                allowMockBackend.current = true;
+                setIsUsingMockBackend(true);
+                setIsBackendReady(true);
+                setSystemInfo({
+                    gpu_available: false, gpu_name: null, gpu_vram_total_gb: 0,
+                    device: "cpu", force_cpu: false, current_model: null, model_loaded: false,
+                    cpu_count: 8, ram_total_gb: 16, ram_available_gb: 8,
+                });
             }
         }
 
-        function initMockBackend() {
-            allowMockBackend.current = true;
-            setIsUsingMockBackend(true);
-            setIsBackendReady(true);
-            setSystemInfo({
-                gpu_available: false,
-                gpu_name: null,
-                gpu_vram_total_gb: 0,
-                device: "cpu",
-                force_cpu: false,
-                current_model: null,
-                model_loaded: false,
-                cpu_count: 8,
-                ram_total_gb: 16,
-                ram_available_gb: 8,
-            });
-        }
-
-        startBackend();
-
+        void startBackend();
         return () => {
-            backendProcess.current?.kill();
+            disposed = true;
+            if (ownedProcess && backendProcess.current === ownedProcess) backendProcess.current = null;
+            ownedProcess?.kill();
+            allowMockBackend.current = false;
         };
     }, [handleBackendMessage, pushBackendLog]);
 
@@ -422,7 +418,11 @@ export function useWhisper(): UseWhisperReturn {
                 word_timestamps: settings.wordTimestamps,
             });
             if (result.status === "cancelled") throw new Error("Transcription cancelled");
-            const transcriptionResult = { ...result, requested_language: language } as unknown as TranscriptionResult;
+            const transcriptionResult = {
+                ...result,
+                requested_language: language,
+                run_settings: { threads: settings.threads, wordTimestamps: settings.wordTimestamps, autoSaveOutput: settings.autoSaveOutput },
+            } as unknown as TranscriptionResult;
             setActiveResult(transcriptionResult);
             return transcriptionResult;
         } catch (err) {
@@ -568,7 +568,8 @@ export function useWhisper(): UseWhisperReturn {
         settings: AdvancedSettings,
         language: string,
         task: string,
-        outputDir?: string
+        outputDir?: string,
+        onlyId?: string
     ) {
         if (isProcessingQueueRef.current) return;
 
@@ -579,7 +580,9 @@ export function useWhisper(): UseWhisperReturn {
 
         try {
             while (!isCancellingQueueRef.current) {
-                const nextItem = queueRef.current.find((item) => item.status === "pending");
+                const nextItem = onlyId
+                    ? queueRef.current.find((item) => item.id === onlyId && item.status !== "processing")
+                    : queueRef.current.find((item) => item.status === "pending");
                 if (!nextItem) break;
 
                 updateQueueItem(nextItem.id, {
@@ -611,9 +614,9 @@ export function useWhisper(): UseWhisperReturn {
                 } catch (err) {
                     if (isCancellingQueueRef.current) {
                         updateQueueItem(nextItem.id, {
-                            status: "pending",
-                            progress: 0,
-                            error: undefined,
+                            status: onlyId ? nextItem.status : "pending",
+                            progress: onlyId ? nextItem.progress : 0,
+                            error: onlyId ? nextItem.error : undefined,
                         });
                         break;
                     }
@@ -624,6 +627,7 @@ export function useWhisper(): UseWhisperReturn {
                         error: (err as Error).message,
                     });
                 }
+                if (onlyId) break;
             }
         } finally {
             isProcessingQueueRef.current = false;
@@ -761,6 +765,8 @@ function handleMockCommand(
                 ],
                 language: "en",
                 duration_seconds: 1.2,
+                audio_duration_seconds: 10,
+                model_used: "mock",
                 file: "sample.mp3",
                 file_path: "/path/to/sample.mp3",
             });

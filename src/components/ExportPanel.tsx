@@ -37,11 +37,11 @@ const formats: {
     timestamps?: boolean;
     requiresWordTimestamps?: boolean;
 }[] = [
-    { id: "txt", label: "Text Only", icon: <FileText className="w-4 h-4" />, ext: ".txt", timestamps: false },
-    { id: "txt", label: "With Time", icon: <Clock className="w-4 h-4" />, ext: ".txt", timestamps: true },
+    { id: "txt", label: "Text", icon: <FileText className="w-4 h-4" />, ext: ".txt", timestamps: false },
+    { id: "txt", label: "Timed text", icon: <Clock className="w-4 h-4" />, ext: ".txt", timestamps: true },
     { id: "srt", label: "SRT", icon: <Subtitles className="w-4 h-4" />, ext: ".srt" },
     { id: "json", label: "JSON", icon: <Braces className="w-4 h-4" />, ext: ".json" },
-    { id: "ass", label: "ASS (karaoke subtitles)", icon: <Subtitles className="w-4 h-4" />, ext: ".ass", requiresWordTimestamps: true },
+    { id: "ass", label: "ASS", icon: <Subtitles className="w-4 h-4" />, ext: ".ass", requiresWordTimestamps: true },
 ];
 
 export default function ExportPanel({
@@ -79,6 +79,9 @@ export default function ExportPanel({
                 language: result.language,
             }
         : null;
+    const hasUnreliableTiming = Boolean(selectedTranscript?.segments.some((segment) =>
+        segment.words?.some((word) => word.timing_unreliable)
+    ));
     const hasWordTimestamps = Boolean(
         selectedTranscript &&
         selectedTranscript.segments.some((segment) => (segment.words?.length ?? 0) > 0) &&
@@ -187,32 +190,34 @@ export default function ExportPanel({
             )}
 
             {/* Format Selection Grid */}
-            <div className="grid grid-cols-2 gap-2 mb-4">
+            <div className="grid grid-cols-2 gap-2 mb-3" aria-label="Export format">
                 {formats.map((fmt, i) => {
                     const disabled = Boolean(fmt.requiresWordTimestamps && !hasWordTimestamps);
+                    const selected = selectedIdx === i;
 
                     return (
-                    <button
-                        key={i}
-                        onClick={() => setSelectedIdx(i)}
-                        disabled={disabled}
-                        className={`
-                            flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                            ${selectedIdx === i
-                                ? "bg-accent-500/20 text-accent-300 border border-accent-500/30"
-                                : "bg-surface-800/50 text-surface-400 hover:bg-surface-800 hover:text-surface-200 border border-transparent"}
-                            ${disabled ? "opacity-40 cursor-not-allowed hover:bg-surface-800/50 hover:text-surface-400" : ""}
-                        `}
-                        title={disabled ? "Enable word-level timestamps to export karaoke ASS subtitles." : fmt.label}
-                    >
-                        {fmt.icon}
-                        <span>{fmt.label}</span>
-                    </button>
+                        <button
+                            key={i}
+                            onClick={() => setSelectedIdx(i)}
+                            disabled={disabled}
+                            aria-pressed={selected}
+                            className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2.5 text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400
+                                ${fmt.id === "ass" ? "col-span-2" : ""}
+                                ${selected ? "border-accent-500/30 bg-accent-500/20 text-accent-300" : "border-transparent bg-surface-800/50 text-surface-300 hover:bg-surface-800 hover:text-surface-100"}
+                                ${disabled ? "cursor-not-allowed opacity-60 hover:bg-surface-800/50 hover:text-surface-300" : ""}`}
+                            title={disabled ? "Karaoke ASS requires word timestamps with usable timing for every word." : fmt.label}
+                        >
+                            <span className="shrink-0">{fmt.icon}</span>
+                            <span className="whitespace-nowrap">{fmt.label}</span>
+                            {fmt.id === "ass" && <span className="ml-auto truncate text-[10px] font-normal text-surface-500">Karaoke subtitles</span>}
+                        </button>
                     );
                 })}
             </div>
 
             {saveError && <p role="alert" className="text-xs text-danger-400 mb-3 break-words">{saveError}</p>}
+
+            {!hasWordTimestamps && <p className="mb-3 text-[11px] leading-relaxed text-surface-500">{hasUnreliableTiming ? "Karaoke ASS is unavailable because some words have no reliable timing." : "Enable word timestamps before transcribing to use karaoke ASS."}</p>}
 
             {/* Main Save Button */}
             <button

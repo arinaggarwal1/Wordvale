@@ -14,6 +14,7 @@ import {
     List,
     Sparkles,
     RotateCcw,
+    Play,
 } from "lucide-react";
 import type { QueueItem, QueueItemStatus } from "../types/models";
 import { estimateTime, formatDuration } from "../constants";
@@ -21,7 +22,8 @@ import { estimateTime, formatDuration } from "../constants";
 interface QueuePanelProps {
     queue: QueueItem[];
     onRemove: (id: string) => void;
-    onRetry: (id: string) => void;
+    onRun: (id: string) => void;
+    canRun: boolean;
     onReorder: (fromIndex: number, toIndex: number) => void;
     currentModel: string | null;
     onSelect: (id: string | null) => void;
@@ -58,7 +60,8 @@ const statusConfig: Record<
 export default function QueuePanel({
     queue,
     onRemove,
-    onRetry,
+    onRun,
+    canRun,
     onReorder,
     currentModel,
     onSelect,
@@ -168,7 +171,18 @@ export default function QueuePanel({
                                     </>
                                 )}
 
-                                {item.status === "failed" && <button onClick={() => onRetry(item.id)} className="p-1.5 rounded-lg text-surface-400 hover:text-surface-100" title="Retry file" aria-label={`Retry ${item.fileName}`}><RotateCcw className="w-3.5 h-3.5" /></button>}
+                                {!isProcessing && (
+                                    <button
+                                        onClick={() => onRun(item.id)}
+                                        disabled={!canRun}
+                                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-accent-300 hover:bg-accent-500/10 disabled:cursor-not-allowed disabled:opacity-35"
+                                        aria-label={`${item.result ? "Redo" : "Run"} ${item.fileName}`}
+                                        title={!canRun ? "Finish the current operation and check the selected model and language" : item.result ? "Transcribe this file again" : "Transcribe only this file"}
+                                    >
+                                        {item.result ? <RotateCcw className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                        {item.result ? "Redo" : "Run"}
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => onRemove(item.id)}
                                     disabled={disableRemove}

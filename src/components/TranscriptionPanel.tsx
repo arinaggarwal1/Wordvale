@@ -12,6 +12,7 @@ import {
     Braces,
     Clock,
     Loader2,
+    Info,
 } from "lucide-react";
 import type {
     TranscriptionResult,
@@ -19,6 +20,7 @@ import type {
     TranscriptVariantData,
     TranscriptView,
 } from "../types/models";
+import { SUPPORTED_LANGUAGES } from "../types/models";
 
 interface TranscriptionPanelProps {
     result: TranscriptionResult | null;
@@ -31,7 +33,7 @@ interface TranscriptionPanelProps {
     onTranscriptViewChange: (view: TranscriptView) => void;
 }
 
-type Tab = "transcript" | "json" | "timestamps";
+type Tab = "transcript" | "json" | "timestamps" | "info";
 
 function formatTimestamp(seconds: number): string {
     const h = Math.floor(seconds / 3600);
@@ -77,6 +79,21 @@ export default function TranscriptionPanel({
         )
         : [];
 
+    const languageLabel = (code?: string) => code
+        ? SUPPORTED_LANGUAGES.find((language) => language.code === code)?.name || code
+        : "Unavailable";
+    const infoRows = result ? [
+        { label: "Model", value: result.model_used || "Unavailable" },
+        { label: "Audio length", value: result.audio_duration_seconds != null ? formatTimestamp(result.audio_duration_seconds) : "Unavailable" },
+        { label: "Processing time", value: `${result.duration_seconds.toFixed(2)} seconds` },
+        { label: "Task", value: result.task === "translate" ? "Translate to English" : result.task === "transcribe" ? "Transcribe" : "Unavailable" },
+        { label: "Language setting", value: languageLabel(result.requested_language) },
+        { label: "Result language", value: languageLabel(result.original?.language || result.language) },
+        { label: "Threads", value: result.run_settings ? String(result.run_settings.threads) : "Unavailable" },
+        { label: "Word timestamps", value: result.run_settings ? (result.run_settings.wordTimestamps ? "On" : "Off") : "Unavailable" },
+        { label: "Auto save", value: result.run_settings ? (result.run_settings.autoSaveOutput ? "On" : "Off") : "Unavailable" },
+    ] : [];
+
     // Auto-scroll during transcription
     useEffect(() => {
         if (isTranscribing && scrollRef.current) {
@@ -94,10 +111,13 @@ export default function TranscriptionPanel({
             case "json":
                 text = JSON.stringify(selectedTranscript?.segments || [], null, 2);
                 break;
+            case "info":
+                text = infoRows.map((row) => `${row.label}: ${row.value}`).join("\n");
+                break;
             case "timestamps":
                 text = wordTimestamps.length > 0
                     ? wordTimestamps
-                        .map((word) => `[${formatTimestamp(word.start)} -> ${formatTimestamp(word.end)}] ${word.word}`)
+                        .map((word) => word.timing_unreliable ? `[Timing unavailable] ${word.word}` : `[${formatTimestamp(word.start)} -> ${formatTimestamp(word.end)}] ${word.word}`)
                         .join("\n")
                     : selectedTranscript?.srt || "";
                 break;
@@ -115,6 +135,7 @@ export default function TranscriptionPanel({
         { id: "transcript", label: "Transcript", icon: <FileText className="w-3.5 h-3.5" /> },
         { id: "json", label: "JSON", icon: <Braces className="w-3.5 h-3.5" /> },
         { id: "timestamps", label: "Timestamps", icon: <Clock className="w-3.5 h-3.5" /> },
+        { id: "info", label: "Info", icon: <Info className="w-3.5 h-3.5" /> },
     ];
 
     const hasContent = result || isTranscribing;
@@ -143,7 +164,7 @@ export default function TranscriptionPanel({
                         ))}
                     </div>
 
-                    {hasTranslation && (
+                    {hasTranslation && activeTab !== "info" && (
                         <div className="flex items-center rounded-lg border border-surface-800/70 bg-surface-900/70 p-1">
                             <button
                                 onClick={() => onTranscriptViewChange("original")}
@@ -250,19 +271,35 @@ export default function TranscriptionPanel({
                             </pre>
                         )}
 
+                        {activeTab === "info" && (
+                            <div className="max-w-3xl">
+                                <h3 className="text-sm font-semibold text-surface-100">Transcription details</h3>
+                                <p className="mt-1 text-xs leading-relaxed text-surface-500">Settings captured for this run. Processing time includes audio conversion and transcription{result.task === "translate" ? " and translation" : ""}.</p>
+                                <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    {infoRows.map((row) => (
+                                        <div key={row.label} className="rounded-xl border border-surface-800/70 bg-surface-900/50 px-4 py-3">
+                                            <dt className="text-[10px] font-medium uppercase tracking-wider text-surface-500">{row.label}</dt>
+                                            <dd className="mt-1.5 break-words text-sm font-medium text-surface-200">{row.value}</dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </div>
+                        )}
+
                         {activeTab === "timestamps" && (
                             wordTimestamps.length > 0 ? (
                                 <div className="space-y-1">
                                     <div className="mb-2 px-3 text-[11px] uppercase tracking-wider text-surface-500">
-                                        Word-level timestamps
+                                        Word-level timestamps · approximate
                                     </div>
+                                    {wordTimestamps.some((word) => word.timing_unreliable) && <p className="px-3 pb-2 text-xs text-warning-400">Some words have no usable timing. Their timestamps are shown as unavailable.</p>}
                                     {wordTimestamps.map((word, i) => (
                                         <div
                                             key={`${word.segmentId}-${i}-${word.start}`}
                                             className="flex gap-3 py-2 px-3 rounded-lg hover:bg-surface-800/40 transition-colors group"
                                         >
                                             <span className="text-[11px] font-mono text-accent-400/70 whitespace-nowrap pt-0.5 shrink-0">
-                                                {formatTimestamp(word.start)} → {formatTimestamp(word.end)}
+                                                {word.timing_unreliable ? "Timing unavailable" : `${formatTimestamp(word.start)} → ${formatTimestamp(word.end)}`}
                                             </span>
                                             <span className="text-sm text-surface-200 leading-relaxed">
                                                 {word.word}

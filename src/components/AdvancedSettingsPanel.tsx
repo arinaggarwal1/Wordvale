@@ -86,6 +86,8 @@ function SliderRow({
                 step={step}
                 value={value}
                 onChange={(e) => onChange(parseFloat(e.target.value))}
+                aria-label={label}
+                aria-describedby={label === "Threads" ? "threads-help" : undefined}
                 className="w-full h-1.5 bg-surface-700 rounded-full appearance-none cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
                    [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
@@ -141,11 +143,11 @@ export default function AdvancedSettingsPanel({
         <div className="mt-4">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-between w-full px-3 py-2 rounded-lg
-                   bg-surface-800/40 hover:bg-surface-800/60 transition-colors text-xs"
+                className="select-trigger"
+                aria-expanded={isOpen}
             >
-                <span className="flex items-center gap-2 text-surface-300 font-medium">
-                    <Settings className="w-3.5 h-3.5 text-surface-400" />
+                <span className="flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-surface-400" />
                     Advanced Settings
                 </span>
                 <ChevronDown
@@ -166,6 +168,10 @@ export default function AdvancedSettingsPanel({
                         step={1}
                         onChange={(v) => update({ threads: v })}
                     />
+
+                    <p id="threads-help" className="text-[11px] leading-relaxed text-surface-500">
+                        Controls CPU threads used by Whisper. More threads can speed things up, but may slow other apps or make your Mac warmer. Changes apply to the next run.
+                    </p>
 
                     {/* Divider */}
                     <div className="border-t border-surface-800/50" />

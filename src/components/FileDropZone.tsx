@@ -201,7 +201,7 @@ export default function FileDropZone({
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                            <div className="rounded-full border border-surface-800/60 bg-surface-900/50 px-3 py-2">
+                            <div className="rounded-xl border border-surface-800/60 bg-surface-900/50 px-3 py-2">
                                 <div className="flex items-center gap-2 text-surface-400">
                                     <ListOrdered className="w-4 h-4" />
                                     <span className="text-[11px] uppercase tracking-wider">Up Next</span>
@@ -214,7 +214,7 @@ export default function FileDropZone({
                                 </p>
                             </div>
 
-                            <div className="rounded-full border border-surface-800/60 bg-surface-900/50 px-3 py-2">
+                            <div className="rounded-xl border border-surface-800/60 bg-surface-900/50 px-3 py-2">
                                 <div className="flex items-center gap-2 text-surface-400">
                                     <CheckCircle2 className="w-4 h-4" />
                                     <span className="text-[11px] uppercase tracking-wider">Completed</span>
@@ -222,7 +222,7 @@ export default function FileDropZone({
                                 <p className="mt-1 text-sm font-semibold text-surface-100">{completedCount}</p>
                             </div>
 
-                            <div className="rounded-full border border-surface-800/60 bg-surface-900/50 px-3 py-2">
+                            <div className="rounded-xl border border-surface-800/60 bg-surface-900/50 px-3 py-2">
                                 <div className="flex items-center gap-2 text-surface-400">
                                     <AlertCircle className="w-4 h-4" />
                                     <span className="text-[11px] uppercase tracking-wider">Needs Attention</span>

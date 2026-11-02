@@ -76,6 +76,7 @@ export interface WordTimestamp {
     start: number;
     end: number;
     probability: number;
+    timing_unreliable?: boolean;
 }
 
 export type TranscriptView = "original" | "english";
@@ -96,6 +97,9 @@ export interface TranscriptionResult {
     segments: TranscriptionSegment[];
     language: string;
     duration_seconds: number;
+    audio_duration_seconds?: number | null;
+    model_used?: string;
+    run_settings?: { threads: number; wordTimestamps: boolean; autoSaveOutput: boolean };
     requested_language?: string;
     file: string;
     file_path: string;

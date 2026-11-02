@@ -18,6 +18,7 @@ import {
     X,
     Settings,
     ArrowLeft,
+    ArrowRight,
     HardDrive,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/tauri";
@@ -68,7 +69,6 @@ export default function App() {
         addToQueue,
         removeFromQueue,
         reorderQueue,
-        retryQueueItem,
         markSaved,
         clearError,
         updateCommand,
@@ -85,6 +85,9 @@ export default function App() {
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    const [pendingRedo, setPendingRedo] = useState<{ id: string; fileName: string } | null>(null);
+    const [isStarting, setIsStarting] = useState(false);
+    const startInProgress = useRef(false);
     const [pendingRemoval, setPendingRemoval] = useState<{ id: string; fileName: string } | null>(null);
     const queueForClose = useRef(queue);
     queueForClose.current = queue;
@@ -209,39 +212,48 @@ export default function App() {
     }, [addToQueue]);
 
     // Start transcription
-    const handleStart = useCallback(async () => {
+    const handleStart = useCallback(async (onlyId?: string) => {
+        if (startInProgress.current) return;
         if (isTranscribing || isModelLoading || !modelStorage || queue.length === 0 || (currentModel?.endsWith(".en") && selectedLanguage !== "en") || (selectedTask === "translate" && currentModel && models.find((m) => m.name === currentModel)?.translation_support === false)) return;
-        if (!queue.some((item) => item.status === "pending")) return;
+        if (onlyId ? !queue.some((item) => item.id === onlyId && item.status !== "processing") : !queue.some((item) => item.status === "pending")) return;
 
         if (!currentModel && modelStorage && !modelStorage.downloaded_models.some((model) => model.name === "base")) {
             setPendingModelDownload("base");
             return;
         }
 
-        let outputDir: string | undefined;
-        if (settings.autoSaveOutput) {
-            const isTauri: boolean = "__TAURI__" in window;
-            if (!isTauri) { window.alert("Auto Save requires the desktop app."); return; }
-            const { open } = await import("@tauri-apps/api/dialog");
-            const chosen = await open({ directory: true, title: "Choose a folder for automatically saved transcripts" });
-            if (typeof chosen !== "string") return;
-            outputDir = chosen;
+        startInProgress.current = true;
+        setIsStarting(true);
+        try {
+            let outputDir: string | undefined;
+            if (settings.autoSaveOutput) {
+                const isTauri: boolean = "__TAURI__" in window;
+                if (!isTauri) { window.alert("Auto Save requires the desktop app."); return; }
+                const { open } = await import("@tauri-apps/api/dialog");
+                const chosen = await open({ directory: true, title: "Choose a folder for automatically saved transcripts" });
+                if (typeof chosen !== "string") return;
+                outputDir = chosen;
+            }
+
+            // Follow a single requested file, or the currently processing batch item.
+            setSelectedQueueId(onlyId ?? null);
+
+            // Load model if not loaded
+            if (!currentModel) {
+                if (!await loadModel("base")) return;
+            }
+
+            await processQueue(
+                settings,
+                selectedLanguage,
+                selectedTask,
+                outputDir,
+                onlyId
+            );
+        } finally {
+            startInProgress.current = false;
+            setIsStarting(false);
         }
-
-        // Reset selection to follow progress
-        setSelectedQueueId(null);
-
-        // Load model if not loaded
-        if (!currentModel) {
-            if (!await loadModel("base")) return;
-        }
-
-        await processQueue(
-            settings,
-            selectedLanguage,
-            selectedTask,
-            outputDir
-        );
     }, [
         isTranscribing,
         isModelLoading,
@@ -255,6 +267,16 @@ export default function App() {
         selectedLanguage,
         selectedTask,
     ]);
+
+    const handleRunFile = (id: string) => {
+        const item = queueForClose.current.find((entry) => entry.id === id);
+        if (!item || item.status === "processing") return;
+        if (hasUnsaved([item])) {
+            setPendingRedo({ id: item.id, fileName: item.fileName });
+            return;
+        }
+        void handleStart(id);
+    };
 
     const handleModelSelect = (modelName: string) => {
         if (isTranscribing || isModelLoading) return;
@@ -293,14 +315,6 @@ export default function App() {
 
     return (
         <div className="h-screen flex flex-col bg-surface-950">
-            {/* ─── Title bar (draggable in Tauri) ─── */}
-            <div
-                className="h-8 flex items-center justify-center bg-surface-950/80 border-b border-surface-800/30 select-none"
-                data-tauri-drag-region
-            >
-                <span className="text-[11px] text-surface-500 font-medium">Wordvale</span>
-            </div>
-
             {/* ─── Main layout ─── */}
             <div className="flex-1 flex min-h-0">
                 {/* ═══════════════ LEFT SIDEBAR ═══════════════ */}
@@ -315,14 +329,6 @@ export default function App() {
                                 <h1 className="text-base font-bold text-surface-100 leading-tight">Wordvale</h1>
                                 <p className="text-[10px] text-surface-500 font-medium">Offline Transcription</p>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Backend status */}
-                    <div className="px-5 mb-4">
-                        <div className={`flex items-center gap-2 text-xs ${isBackendReady ? "text-success-400" : "text-warning-400"}`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${isBackendReady ? "bg-success-400" : "bg-warning-400 animate-pulse"}`} />
-                            {isBackendReady ? "Backend Ready" : "Connecting..."}
                         </div>
                     </div>
 
@@ -348,7 +354,7 @@ export default function App() {
 
                     {/* Start / Stop button */}
                     <div className="p-5 border-t border-surface-800/30">
-                        <button onClick={() => { setShowModels(false); setShowSettings((value) => showModels ? true : !value); }} className="btn-ghost w-full justify-start mb-3" aria-pressed={showSettings}>
+                        <button onClick={() => { setShowModels(false); setShowSettings((value) => showModels ? true : !value); }} className="btn-ghost w-full justify-center mb-3" aria-pressed={showSettings}>
                             {showSettings ? <ArrowLeft className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
                             {showSettings ? "Back to transcription" : "Settings"}
                         </button>
@@ -364,8 +370,8 @@ export default function App() {
                             </button>
                         ) : (
                             <button
-                                onClick={handleStart}
-                                disabled={pendingCount === 0 || isModelLoading || !modelStorage || Boolean(currentModel?.endsWith(".en") && selectedLanguage !== "en") || Boolean(selectedTask === "translate" && selectedModelInfo?.translation_support === false)}
+                                onClick={() => void handleStart()}
+                                disabled={pendingCount === 0 || isModelLoading || isStarting || !modelStorage || Boolean(currentModel?.endsWith(".en") && selectedLanguage !== "en") || Boolean(selectedTask === "translate" && selectedModelInfo?.translation_support === false)}
                                 className="btn-primary w-full py-3 text-sm font-semibold rounded-xl"
                             >
                                 {isModelLoading ? (
@@ -412,7 +418,8 @@ export default function App() {
                     <QueuePanel
                         queue={queue}
                         onRemove={handleRemoveFromQueue}
-                        onRetry={retryQueueItem}
+                        onRun={handleRunFile}
+                        canRun={isBackendReady && !isTranscribing && !isModelLoading && !isStarting && Boolean(modelStorage) && !(currentModel?.endsWith(".en") && selectedLanguage !== "en") && !(selectedTask === "translate" && selectedModelInfo?.translation_support === false)}
                         onReorder={reorderQueue}
                         currentModel={currentModel}
                         onSelect={setSelectedQueueId}
@@ -454,9 +461,13 @@ export default function App() {
                         />
                     </div>
 
-                    <button onClick={() => { setShowSettings(false); setShowModels(true); }} className="card mt-4 flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:border-accent-500/40 hover:bg-surface-800/60">
-                        <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-surface-300"><HardDrive className="h-4 w-4 text-accent-400" /> Manage models</span>
-                        <span className="text-xs text-surface-500">{modelStorage?.downloaded_count ?? "—"} downloaded →</span>
+                    <button onClick={() => { setShowSettings(false); setShowModels(true); }} className="card group mt-4 flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-accent-500/40 hover:bg-surface-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">
+                        <HardDrive className="h-4 w-4 shrink-0 text-accent-400" />
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-semibold uppercase tracking-wider text-surface-300">Manage models</span>
+                            <span className="mt-1 block text-xs text-surface-500">{modelStorage?.downloaded_count ?? "—"} downloaded</span>
+                        </span>
+                        <ArrowRight className="h-4 w-4 shrink-0 text-surface-500 transition-colors group-hover:text-accent-400" aria-hidden="true" />
                     </button>
 
                 </aside>
@@ -467,33 +478,45 @@ export default function App() {
                 <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" /><Dialog.Content className="fixed left-1/2 top-1/2 z-[71] w-[min(440px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-surface-700/70 bg-surface-900 p-6 shadow-2xl focus:outline-none"><Dialog.Title className="text-base font-semibold text-surface-100">Download model?</Dialog.Title><Dialog.Description className="mt-3 text-sm leading-relaxed text-surface-400">{models.find((m) => m.name === pendingModelDownload)?.display_name || pendingModelDownload} isn’t downloaded yet. Download it before using it for transcription. You can see download progress in Manage models.</Dialog.Description><div className="mt-6 flex justify-end gap-3"><Dialog.Close asChild><button className="btn-ghost text-sm">Cancel</button></Dialog.Close><button className="btn-primary text-sm" onClick={() => { if (pendingModelDownload) void loadModel(pendingModelDownload); setPendingModelDownload(null); setShowModels(true); setShowSettings(false); }}>Download and use</button></div></Dialog.Content></Dialog.Portal>
             </Dialog.Root>
 
+            <Dialog.Root open={pendingRedo !== null} onOpenChange={(open) => { if (!open) setPendingRedo(null); }}>
+                <Dialog.Portal>
+                    <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" />
+                    <Dialog.Content className="fixed left-1/2 top-1/2 z-[71] w-[min(440px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-surface-700/70 bg-surface-900 p-6 shadow-2xl focus:outline-none">
+                        <Dialog.Title className="text-base font-semibold text-surface-100">Redo unsaved transcript?</Dialog.Title>
+                        <Dialog.Description className="mt-3 text-sm leading-relaxed text-surface-400"><span className="break-words font-medium text-surface-200">{pendingRedo?.fileName}</span> has an unsaved transcript. A successful redo will replace it with the new result. You can save it first if you want to keep it.</Dialog.Description>
+                        <div className="mt-6 flex justify-end gap-3"><Dialog.Close asChild><button className="btn-ghost px-4 py-2 text-sm">Keep transcript</button></Dialog.Close><button className="btn-primary text-sm" onClick={() => { const id = pendingRedo?.id; setPendingRedo(null); if (id) void handleStart(id); }}>Redo transcription</button></div>
+                    </Dialog.Content>
+                </Dialog.Portal>
+            </Dialog.Root>
+
             <Dialog.Root open={pendingRemoval !== null} onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}>
                 <Dialog.Portal>
                     <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" />
                     <Dialog.Content
-                        className="fixed left-1/2 top-1/2 z-[71] w-[min(440px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-surface-700/70 bg-surface-900 p-6 shadow-2xl focus:outline-none"
+                        className="fixed left-1/2 top-1/2 z-[71] flex h-[228px] w-[min(440px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-surface-700/70 bg-surface-900 shadow-2xl focus:outline-none"
                         onOpenAutoFocus={(event) => {
                             event.preventDefault();
                             document.getElementById("keep-transcript")?.focus();
                         }}
                     >
-                        <div className="flex items-start gap-4">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-warning-500/20 bg-warning-500/10 text-warning-400">
-                                <AlertTriangle className="h-5 w-5" />
+                        <div className="flex min-h-0 flex-1 items-start gap-3.5 px-6 pt-5 pb-3">
+                            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning-500/10 text-warning-400">
+                                <AlertTriangle className="h-4 w-4" />
                             </div>
                             <div className="min-w-0">
-                                <Dialog.Title className="text-base font-semibold text-surface-100">Remove unsaved transcript?</Dialog.Title>
-                                <Dialog.Description className="mt-2 text-sm leading-relaxed text-surface-400">
-                                    <span className="break-words font-medium text-surface-200">{pendingRemoval?.fileName}</span> has unsaved transcript work. Removing it from the queue will discard that work. Your original audio or video file will stay on your computer.
+                                <Dialog.Title className="text-[15px] font-semibold leading-6 tracking-[-0.01em] text-surface-100">Discard unsaved transcript?</Dialog.Title>
+                                <Dialog.Description className="mt-1.5 max-h-[100px] overflow-y-auto text-[13px] leading-[1.5] text-surface-300">
+                                    The transcript for <span className="break-words font-medium text-surface-200">{pendingRemoval?.fileName}</span> hasn't been saved. Removing this file will discard its transcript.
+                                    <span className="mt-2 block text-xs leading-5 text-surface-400">Your original file won't be affected.</span>
                                 </Dialog.Description>
                             </div>
                         </div>
-                        <div className="mt-6 flex justify-end gap-3">
+                        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-surface-700/30 bg-surface-950/20 px-6 py-3.5">
                             <Dialog.Close asChild>
-                                <button id="keep-transcript" className="btn-ghost px-4 py-2 text-sm">Keep transcript</button>
+                                <button id="keep-transcript" className="h-9 rounded-lg border border-surface-700/60 bg-surface-800/70 px-4 text-[13px] font-medium text-surface-200 transition-colors hover:bg-surface-700/70 hover:text-surface-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400">Cancel</button>
                             </Dialog.Close>
-                            <button onClick={confirmRemoveFromQueue} className="rounded-lg bg-danger-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-danger-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger-400">
-                                Remove from queue
+                            <button onClick={confirmRemoveFromQueue} className="h-9 rounded-lg border border-danger-500/40 bg-danger-600/90 px-4 text-[13px] font-medium text-white transition-colors hover:bg-danger-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger-400">
+                                Discard transcript
                             </button>
                         </div>
                     </Dialog.Content>

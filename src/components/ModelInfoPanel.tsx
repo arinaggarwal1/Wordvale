@@ -3,7 +3,9 @@
  * Right sidebar panel showing model details, system info, and processing stats.
  */
 
+import { useId, useState } from "react";
 import {
+    ChevronDown,
     Cpu,
     HardDrive,
     Monitor,
@@ -77,96 +79,104 @@ export default function ModelInfoPanel({
     isTranscribing,
     elapsedTime,
 }: ModelInfoPanelProps) {
+    const [modelExpanded, setModelExpanded] = useState(false);
+    const [systemExpanded, setSystemExpanded] = useState(false);
+    const modelDetailsId = useId();
+    const systemDetailsId = useId();
     return (
         <div className="space-y-4">
             {/* ─── Model Info Card ─── */}
             <div className="card p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400 mb-3 flex items-center gap-2">
-                    <Cpu className="w-3.5 h-3.5" />
-                    Model Info
-                </h3>
+                <button onClick={() => setModelExpanded((value) => !value)} aria-expanded={modelExpanded} aria-controls={modelDetailsId} className="mb-3 flex w-full items-center justify-between text-left text-xs font-semibold uppercase tracking-wider text-surface-400 transition-colors hover:text-surface-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400 rounded">
+                    <span className="flex items-center gap-2"><Cpu className="w-3.5 h-3.5" /> Model Info</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${modelExpanded ? "rotate-180" : ""}`} />
+                </button>
 
                 {model ? (
                     <div className="space-y-0.5 animate-fade-in">
-                        <div className="mb-3">
+                        <div>
                             <p className="text-base font-semibold text-surface-100">{model.display_name}</p>
                             <p className="text-xs text-surface-500 mt-0.5">{model.recommended_use_case}</p>
                         </div>
 
-                        <StatRow
-                            icon={<Activity className="w-3.5 h-3.5" />}
-                            label="Parameters"
-                            value={model.parameter_count}
-                        />
-                        <StatRow
-                            icon={<MemoryStick className="w-3.5 h-3.5" />}
-                            label="VRAM Required"
-                            value={`~${model.estimated_vram_gb} GB`}
-                        />
-                        <StatRow
-                            icon={<Zap className="w-3.5 h-3.5" />}
-                            label="Relative Speed"
-                            value={`${model.relative_speed}x`}
-                            accent
-                        />
+                        <div id={modelDetailsId} hidden={!modelExpanded} className="pt-3">
+                            <StatRow
+                                icon={<Activity className="w-3.5 h-3.5" />}
+                                label="Parameters"
+                                value={model.parameter_count}
+                            />
+                            <StatRow
+                                icon={<MemoryStick className="w-3.5 h-3.5" />}
+                                label="VRAM Required"
+                                value={`~${model.estimated_vram_gb} GB`}
+                            />
+                            <StatRow
+                                icon={<Zap className="w-3.5 h-3.5" />}
+                                label="Relative Speed"
+                                value={`${model.relative_speed}x`}
+                                accent
+                            />
 
-                        <div className="flex gap-1.5 mt-3 flex-wrap">
-                            {model.multilingual_support && (
-                                <Badge variant="success">
-                                    <Globe className="w-3 h-3" />
-                                    Multilingual
-                                </Badge>
-                            )}
-                            {model.translation_support && (
-                                <Badge variant="success">
-                                    <Languages className="w-3 h-3" />
-                                    Translation
-                                </Badge>
-                            )}
-                            {!model.multilingual_support && (
-                                <Badge variant="neutral">English Only</Badge>
-                            )}
+                            <div className="flex gap-1.5 mt-3 flex-wrap">
+                                {model.multilingual_support && (
+                                    <Badge variant="success">
+                                        <Globe className="w-3 h-3" />
+                                        Multilingual
+                                    </Badge>
+                                )}
+                                {model.translation_support && (
+                                    <Badge variant="success">
+                                        <Languages className="w-3 h-3" />
+                                        Translation
+                                    </Badge>
+                                )}
+                                {!model.multilingual_support && (
+                                    <Badge variant="neutral">English Only</Badge>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ) : (
-                    <p className="text-xs text-surface-500 italic">Select a model to view details</p>
+                    <p id={modelDetailsId} className="text-xs text-surface-500 italic">Select a model to view details</p>
                 )}
             </div>
 
             {/* ─── System Info Card ─── */}
             <div className="card p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-400 mb-3 flex items-center gap-2">
-                    <Monitor className="w-3.5 h-3.5" />
-                    System
-                </h3>
+                <button onClick={() => setSystemExpanded((value) => !value)} aria-expanded={systemExpanded} aria-controls={systemDetailsId} className="flex w-full items-center justify-between text-left text-xs font-semibold uppercase tracking-wider text-surface-400 transition-colors hover:text-surface-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400 rounded">
+                    <span className="flex items-center gap-2"><Monitor className="w-3.5 h-3.5" /> System</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${systemExpanded ? "rotate-180" : ""}`} />
+                </button>
 
-                {systemInfo ? (
-                    <div className="space-y-0.5 animate-fade-in">
-                        <StatRow
-                            icon={<Cpu className="w-3.5 h-3.5" />}
-                            label="CPU Cores"
-                            value={`${systemInfo.cpu_count}`}
-                        />
-                        <StatRow
-                            icon={<HardDrive className="w-3.5 h-3.5" />}
-                            label="RAM"
-                            value={`${systemInfo.ram_available_gb} / ${systemInfo.ram_total_gb} GB`}
-                        />
-                        <StatRow icon={<Monitor className="w-3.5 h-3.5" />} label="Execution device" value="Not verified" />
-                        <StatRow
-                            icon={<HardDrive className="w-3.5 h-3.5" />}
-                            label="FFmpeg"
-                            value={systemInfo.ffmpeg_available ? "Available" : "Missing"}
-                            accent={systemInfo.ffmpeg_available}
-                        />
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        <div className="skeleton h-4 rounded w-full" />
-                        <div className="skeleton h-4 rounded w-3/4" />
-                        <div className="skeleton h-4 rounded w-5/6" />
-                    </div>
-                )}
+                <div id={systemDetailsId} hidden={!systemExpanded} className="mt-3">
+                    {systemInfo ? (
+                        <div className="space-y-0.5 animate-fade-in">
+                            <StatRow
+                                icon={<Cpu className="w-3.5 h-3.5" />}
+                                label="CPU Cores"
+                                value={`${systemInfo.cpu_count}`}
+                            />
+                            <StatRow
+                                icon={<HardDrive className="w-3.5 h-3.5" />}
+                                label="RAM"
+                                value={`${systemInfo.ram_available_gb} / ${systemInfo.ram_total_gb} GB`}
+                            />
+                            <StatRow icon={<Monitor className="w-3.5 h-3.5" />} label="Execution device" value="Not verified" />
+                            <StatRow
+                                icon={<HardDrive className="w-3.5 h-3.5" />}
+                                label="FFmpeg"
+                                value={systemInfo.ffmpeg_available ? "Available" : "Missing"}
+                                accent={systemInfo.ffmpeg_available}
+                            />
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <div className="skeleton h-4 rounded w-full" />
+                            <div className="skeleton h-4 rounded w-3/4" />
+                            <div className="skeleton h-4 rounded w-5/6" />
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ─── Processing Stats ─── */}
