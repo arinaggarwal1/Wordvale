@@ -2,9 +2,8 @@ name: Release DMG
 
 on:
   push:
-    branches:
-      - "main"
-  workflow_dispatch:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -40,6 +39,11 @@ jobs:
           rustc -V
           cargo -V
 
+      - name: Verify release version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -63,16 +67,6 @@ jobs:
           echo "path=$DMG_PATH" >> "$GITHUB_OUTPUT"
           echo "name=$(basename "$DMG_PATH")" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release tag
-        id: release
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG_NAME="auto-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
-          RELEASE_NAME="Automated Release ${GITHUB_RUN_NUMBER}"
-          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
-
       - name: Upload DMG as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -82,8 +76,7 @@ jobs:
       - name: Publish DMG to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ steps.release.outputs.tag }}
-          RELEASE_NAME: ${{ steps.release.outputs.name }}
+          TAG_NAME: ${{ github.ref_name }}
           DMG_PATH: ${{ steps.dmg.outputs.path }}
           RELEASE_ASSET_NAME: Wordvale-macOS-arm64.dmg
         shell: bash
@@ -91,11 +84,12 @@ jobs:
           set -euo pipefail
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" "$DMG_PATH#${RELEASE_ASSET_NAME}" --clobber
-          else
-            gh release create "$TAG_NAME" "$DMG_PATH#${RELEASE_ASSET_NAME}" \
-              --title "$RELEASE_NAME" \
-              --notes "Automated release for commit ${GITHUB_SHA}." \
-              --target "${GITHUB_SHA}" \
-              --latest
+            echo "Release already exists; leaving its assets unchanged."
+            exit 0
           fi
+          PRERELEASE=()
+          if [[ "$TAG_NAME" == *-* ]]; then PRERELEASE=(--prerelease); fi
+          gh release create "$TAG_NAME" "$DMG_PATH#${RELEASE_ASSET_NAME}" \
+            --title "Wordvale ${TAG_NAME}" \
+            --notes "Download the DMG for macOS on Apple silicon, then drag Wordvale to Applications." \
+            --verify-tag "${PRERELEASE[@]}"

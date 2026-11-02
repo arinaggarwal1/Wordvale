@@ -8,7 +8,7 @@
  * Registers keyboard shortcuts and wires up the useWhisper hook.
  */
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     AudioWaveform,
     Play,
@@ -16,6 +16,8 @@ import {
     Loader2,
     AlertTriangle,
     X,
+    Settings,
+    ArrowLeft,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/tauri";
 import { useWhisper } from "./hooks/useWhisper";
@@ -32,12 +34,10 @@ import QueuePanel from "./components/QueuePanel";
 import ExportPanel from "./components/ExportPanel";
 import ModelManagerPanel from "./components/ModelManagerPanel";
 
-const BackendDebugPanel = import.meta.env.DEV
-    ? lazy(() => import("./components/BackendDebugPanel"))
-    : null;
+import SettingsPage from "./components/SettingsPage";
 
 export default function App() {
-    const showBackendDebugPanel = import.meta.env.DEV && BackendDebugPanel !== null;
+    const [showSettings, setShowSettings] = useState(false);
 
     const {
         isBackendReady,
@@ -276,6 +276,10 @@ export default function App() {
 
                     {/* Start / Stop button */}
                     <div className="p-5 border-t border-surface-800/30">
+                        <button onClick={() => setShowSettings((value) => !value)} className="btn-ghost w-full justify-start mb-3" aria-pressed={showSettings}>
+                            {showSettings ? <ArrowLeft className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+                            {showSettings ? "Back to transcription" : "Settings"}
+                        </button>
                         {isTranscribing ? (
                             <button
                                 onClick={cancelTranscription}
@@ -313,6 +317,9 @@ export default function App() {
                     </div>
                 </aside>
 
+                {showSettings ? (
+                    <SettingsPage logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} />
+                ) : (<>
                 {/* ═══════════════ MAIN CONTENT ═══════════════ */}
                 <main className="flex-1 flex flex-col min-w-0 min-h-0 p-5 gap-4 overflow-y-auto">
                     {/* File drop zone */}
@@ -377,17 +384,8 @@ export default function App() {
                         onDeleteAllModels={deleteAllModels}
                     />
 
-                    {showBackendDebugPanel && BackendDebugPanel && (
-                        <Suspense fallback={null}>
-                            <BackendDebugPanel
-                                logs={backendLogs}
-                                isBackendReady={isBackendReady}
-                                isUsingMockBackend={isUsingMockBackend}
-                                error={error}
-                            />
-                        </Suspense>
-                    )}
                 </aside>
+                </>)}
             </div>
 
             {/* ─── Error toast ─── */}

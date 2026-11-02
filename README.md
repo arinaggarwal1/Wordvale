@@ -349,29 +349,14 @@ npm run dist:mac
 
 ## GitHub Releases
 
-This repo now includes a GitHub Actions workflow at `.github/workflows/release-dmg.yml`.
-
-What it does:
-
-- runs on macOS whenever you push to `main`
-- builds the app and DMG
-- creates a new GitHub Release automatically
-- uploads the DMG to that release
-- also stores the DMG as a workflow artifact
-
-Typical release flow:
+The workflow at `.github/workflows/release-dmg.yml` builds an Apple silicon macOS DMG when a version tag is pushed. It publishes prerelease tags such as `v0.1.0-alpha` as GitHub prereleases. Set the same version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` before tagging.
 
 ```bash
-git push origin main
+git tag v0.1.0-alpha
+git push origin v0.1.0-alpha
 ```
 
-After the workflow finishes, GitHub will mark that newly created release as the latest release, and users can download the DMG from the Release page instead of building the app themselves.
-
-Because the release asset is uploaded with a stable name, you can also share a "latest download" link:
-
-```text
-https://github.com/arinaggarwal1/Wordvale/releases/latest/download/Wordvale-macOS-arm64.dmg
-```
+The release must include an asset named `Wordvale-macOS-arm64.dmg` for the Settings update check to find it. The check includes prereleases and compares version tags numerically. It opens the GitHub release page; download the DMG and drag the app to Applications to upgrade. Existing installations without the update check need this manual upgrade first. The DMG is currently unsigned and unnotarized.
 
 ## Design Choices
 

@@ -651,6 +651,7 @@ function handleMockCommand(
                 status: "completed",
                 text: "This is a mock transcription result. In production, run via 'npm run tauri dev' with the Python backend to get real Whisper transcription.",
                 srt: "1\n00:00:00,000 --> 00:00:05,000\nThis is a mock transcription result.\n\n2\n00:00:05,000 --> 00:00:10,000\nRun via Tauri with the Python backend for real transcription.\n",
+                ass: "[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,48,&H00FFFFFF,&H0000FFFF,&H00000000,&H64000000,0,0,1,2,0,2,10,10,40,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,{\\k100}This {\\k100}is {\\k100}a {\\k100}mock {\\k100}transcription {\\k100}result.\n",
                 segments: [
                     { id: 0, start: 0, end: 5, text: "This is a mock transcription result.", speaker: "[Speaker]" },
                     { id: 1, start: 5, end: 10, text: "Run via Tauri with the Python backend for real transcription.", speaker: "[Speaker]" },

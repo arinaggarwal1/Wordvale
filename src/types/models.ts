@@ -80,6 +80,7 @@ export type TranscriptView = "original" | "english";
 export interface TranscriptVariantData {
     text: string;
     srt: string;
+    ass?: string;
     segments: TranscriptionSegment[];
     language: string;
 }
@@ -88,6 +89,7 @@ export interface TranscriptionResult {
     status: string;
     text: string;
     srt: string;
+    ass?: string;
     segments: TranscriptionSegment[];
     language: string;
     duration_seconds: number;
@@ -171,7 +173,7 @@ export interface BackendDebugEntry {
 
 /* ─── Export Options ─── */
 
-export type ExportFormat = "txt" | "srt" | "json";
+export type ExportFormat = "txt" | "srt" | "json" | "ass";
 
 export interface ExportOptions {
     format: ExportFormat;

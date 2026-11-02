@@ -76,6 +76,148 @@ else:
 # Ensure models directory exists
 os.makedirs(MODELS_DIR, exist_ok=True)
 
+ASS_HEADER = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,48,&H00FFFFFF,&H0000FFFF,&H00000000,&H64000000,0,0,1,2,0,2,10,10,40,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+SPECIAL_TOKEN_RE = re.compile(r"^\[(?:_?[A-Z]+(?:_[A-Z]+)?_?(?:\d+)?)\]$")
+PUNCT_ONLY_RE = re.compile(r"^[.,!?;:]+$")
+SENTENCE_END_RE = re.compile(r"[.?!]+[\"')\]]*$")
+
+
+def _is_special_token(token_text: str) -> bool:
+    text = token_text.strip()
+    if not text:
+        return True
+    return bool(SPECIAL_TOKEN_RE.match(text))
+
+
+def _clean_word_tokens(tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    words: List[Dict[str, Any]] = []
+
+    for token in tokens or []:
+        token_offsets = token.get("offsets", {})
+        token_start_ms = token_offsets.get("from")
+        token_end_ms = token_offsets.get("to")
+        token_text = str(token.get("text", "")).strip()
+
+        if token_start_ms is None or token_end_ms is None:
+            continue
+        if not token_text or _is_special_token(token_text):
+            continue
+
+        token_start = token_start_ms / 1000.0
+        token_end = token_end_ms / 1000.0
+        probability = float(token.get("p", 0.0))
+
+        if PUNCT_ONLY_RE.match(token_text):
+            if words:
+                words[-1]["word"] += token_text
+                words[-1]["end"] = max(words[-1]["end"], token_end)
+            continue
+
+        if words and re.match(r"^[’'\-][A-Za-z0-9].*$", token_text):
+            words[-1]["word"] += token_text
+            words[-1]["end"] = max(words[-1]["end"], token_end)
+            continue
+
+        words.append({
+            "word": token_text,
+            "start": token_start,
+            "end": token_end,
+            "probability": probability,
+        })
+
+    return words
+
+
+def _escape_ass_text(text: str) -> str:
+    return text.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
+
+
+def to_ass_time(t: float) -> str:
+    h = int(t // 3600)
+    m = int((t % 3600) // 60)
+    s = int(t % 60)
+    cs = int((t - int(t)) * 100)
+    return f"{h}:{m:02}:{s:02}.{cs:02}"
+
+
+def generate_ass(transcript: Dict[str, Any]) -> str:
+    groups: List[List[Dict[str, Any]]] = []
+
+    for segment in transcript.get("segments", []) or []:
+        words = [word for word in segment.get("words", []) or [] if word.get("word")]
+        if not words:
+            continue
+
+        current_group: List[Dict[str, Any]] = []
+
+        for index, word in enumerate(words):
+            current_group.append(word)
+            next_word = words[index + 1] if index + 1 < len(words) else None
+            pause_to_next = (
+                max(0.0, float(next_word.get("start", 0.0)) - float(word.get("end", word.get("start", 0.0))))
+                if next_word
+                else 0.0
+            )
+
+            if (
+                next_word is None
+                or SENTENCE_END_RE.search(str(word.get("word", "")))
+                or pause_to_next > 0.4
+            ):
+                groups.append(current_group)
+                current_group = []
+
+    dialogue_lines: List[str] = []
+
+    for group in groups:
+        if not group:
+            continue
+
+        start = float(group[0].get("start", 0.0))
+        end = max(float(group[-1].get("end", start)), start + 0.05)
+        karaoke_parts: List[str] = []
+
+        for index, word in enumerate(group):
+            current_start = float(word.get("start", 0.0))
+            current_end = float(word.get("end", current_start))
+
+            if index + 1 < len(group):
+                next_start = float(group[index + 1].get("start", current_end))
+                duration = next_start - current_start
+            else:
+                duration = current_end - current_start
+
+            if duration <= 0:
+                duration = max(current_end - current_start, 0.05)
+
+            k_value = max(5, min(200, int(round(duration * 100))))
+            karaoke_parts.append(r"{\k" + str(k_value) + "}" + _escape_ass_text(str(word.get("word", "")).strip()))
+
+        karaoke_text = " ".join(part for part in karaoke_parts if part)
+        if not karaoke_text:
+            continue
+
+        dialogue_lines.append(
+            f"Dialogue: 0,{to_ass_time(start)},{to_ass_time(end)},Default,,0,0,0,,{karaoke_text}"
+        )
+
+    if not dialogue_lines:
+        return ASS_HEADER
+
+    return ASS_HEADER + "\n".join(dialogue_lines) + "\n"
+
 
 
 class WhisperServer:
@@ -553,6 +695,7 @@ class WhisperServer:
                 result = {
                     "text": translated_result["text"],
                     "srt": translated_result["srt"],
+                    "ass": translated_result["ass"],
                     "segments": translated_result["segments"],
                     "language": translated_result["language"],
                     "duration_seconds": round(elapsed, 2),
@@ -562,12 +705,14 @@ class WhisperServer:
                     "original": {
                         "text": original_result["text"],
                         "srt": original_result["srt"],
+                        "ass": original_result["ass"],
                         "segments": original_result["segments"],
                         "language": original_result["language"],
                     },
                     "english": {
                         "text": translated_result["text"],
                         "srt": translated_result["srt"],
+                        "ass": translated_result["ass"],
                         "segments": translated_result["segments"],
                         "language": translated_result["language"],
                     },
@@ -633,26 +778,7 @@ class WhisperServer:
             start_ms = offsets.get("from", 0)
             end_ms = offsets.get("to", 0)
             text = entry.get("text", "").strip()
-            words: List[Dict[str, Any]] = []
-
-            for token in entry.get("tokens", []) or []:
-                token_offsets = token.get("offsets", {})
-                token_start_ms = token_offsets.get("from")
-                token_end_ms = token_offsets.get("to")
-                token_text = str(token.get("text", ""))
-
-                if token_start_ms is None or token_end_ms is None:
-                    continue
-
-                if not token_text.strip():
-                    continue
-
-                words.append({
-                    "word": token_text.strip(),
-                    "start": token_start_ms / 1000.0,
-                    "end": token_end_ms / 1000.0,
-                    "probability": float(token.get("p", 0.0)),
-                })
+            words = _clean_word_tokens(entry.get("tokens", []) or [])
 
             segment: Dict[str, Any] = {
                 "id": i,
@@ -671,6 +797,7 @@ class WhisperServer:
 
         # Build SRT
         srt = self._build_srt(segments)
+        ass = generate_ass({"segments": segments})
 
         # Language detection from raw output
         language = raw.get("result", {}).get("language", "unknown")
@@ -678,6 +805,7 @@ class WhisperServer:
         return {
             "text": full_text,
             "srt": srt,
+            "ass": ass,
             "segments": segments,
             "language": language,
             "duration_seconds": round(elapsed, 2),

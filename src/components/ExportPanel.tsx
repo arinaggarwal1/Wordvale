@@ -4,7 +4,7 @@
  * Uses native Tauri save dialog for better user experience.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Download,
     FileText,
@@ -28,11 +28,19 @@ interface ExportPanelProps {
     showTranscriptViewSelector: boolean;
 }
 
-const formats: { id: ExportFormat; label: string; icon: React.ReactNode; ext: string; timestamps?: boolean }[] = [
+const formats: {
+    id: ExportFormat;
+    label: string;
+    icon: React.ReactNode;
+    ext: string;
+    timestamps?: boolean;
+    requiresWordTimestamps?: boolean;
+}[] = [
     { id: "txt", label: "Text Only", icon: <FileText className="w-4 h-4" />, ext: ".txt", timestamps: false },
     { id: "txt", label: "With Time", icon: <Clock className="w-4 h-4" />, ext: ".txt", timestamps: true },
     { id: "srt", label: "SRT", icon: <Subtitles className="w-4 h-4" />, ext: ".srt" },
     { id: "json", label: "JSON", icon: <Braces className="w-4 h-4" />, ext: ".json" },
+    { id: "ass", label: "ASS (karaoke subtitles)", icon: <Subtitles className="w-4 h-4" />, ext: ".ass", requiresWordTimestamps: true },
 ];
 
 export default function ExportPanel({
@@ -43,29 +51,46 @@ export default function ExportPanel({
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
     const [exported, setExported] = useState(false);
-
-    if (!result) return null;
-
-    const selectedTranscript: TranscriptVariantData = showTranscriptViewSelector
-        ? selectedTranscriptView === "english"
-            ? result.english || result.original || {
+    const selectedTranscript: TranscriptVariantData | null = result
+        ? showTranscriptViewSelector
+            ? selectedTranscriptView === "english"
+                ? result.english || result.original || {
+                    text: result.text,
+                    srt: result.srt,
+                    ass: result.ass,
+                    segments: result.segments,
+                    language: result.language,
+                }
+                : result.original || result.english || {
+                    text: result.text,
+                    srt: result.srt,
+                    ass: result.ass,
+                    segments: result.segments,
+                    language: result.language,
+                }
+            : {
                 text: result.text,
                 srt: result.srt,
+                ass: result.ass,
                 segments: result.segments,
                 language: result.language,
             }
-            : result.original || result.english || {
-                text: result.text,
-                srt: result.srt,
-                segments: result.segments,
-                language: result.language,
-            }
-        : {
-            text: result.text,
-            srt: result.srt,
-            segments: result.segments,
-            language: result.language,
-        };
+        : null;
+    const hasWordTimestamps = Boolean(
+        selectedTranscript &&
+        selectedTranscript.segments.some((segment) => (segment.words?.length ?? 0) > 0) &&
+        selectedTranscript.ass
+    );
+
+    useEffect(() => {
+        if (!result) return;
+        const selectedFormat = formats[selectedIdx];
+        if (selectedFormat?.requiresWordTimestamps && !hasWordTimestamps) {
+            setSelectedIdx(0);
+        }
+    }, [result, selectedIdx, hasWordTimestamps]);
+
+    if (!result || !selectedTranscript) return null;
 
     const handleExport = async () => {
         if (isSaving) return;
@@ -73,6 +98,9 @@ export default function ExportPanel({
 
         try {
             const fmt = formats[selectedIdx];
+            if (fmt.requiresWordTimestamps && !hasWordTimestamps) {
+                return;
+            }
             let content = "";
             let filename = result.file.replace(/\.[^.]+$/, "");
             if (showTranscriptViewSelector) {
@@ -97,6 +125,9 @@ export default function ExportPanel({
                 case "srt":
                     content = selectedTranscript.srt;
                     break;
+                case "ass":
+                    content = selectedTranscript.ass || "";
+                    break;
                 case "json":
                     content = JSON.stringify(
                         {
@@ -106,6 +137,7 @@ export default function ExportPanel({
                             task: result.task || "transcribe",
                             text: selectedTranscript.text,
                             srt: selectedTranscript.srt,
+                            ass: selectedTranscript.ass,
                             duration_seconds: result.duration_seconds,
                             segments: selectedTranscript.segments,
                         },
@@ -151,21 +183,28 @@ export default function ExportPanel({
 
             {/* Format Selection Grid */}
             <div className="grid grid-cols-2 gap-2 mb-4">
-                {formats.map((fmt, i) => (
+                {formats.map((fmt, i) => {
+                    const disabled = Boolean(fmt.requiresWordTimestamps && !hasWordTimestamps);
+
+                    return (
                     <button
                         key={i}
                         onClick={() => setSelectedIdx(i)}
+                        disabled={disabled}
                         className={`
                             flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
                             ${selectedIdx === i
                                 ? "bg-accent-500/20 text-accent-300 border border-accent-500/30"
                                 : "bg-surface-800/50 text-surface-400 hover:bg-surface-800 hover:text-surface-200 border border-transparent"}
+                            ${disabled ? "opacity-40 cursor-not-allowed hover:bg-surface-800/50 hover:text-surface-400" : ""}
                         `}
+                        title={disabled ? "Enable word-level timestamps to export karaoke ASS subtitles." : fmt.label}
                     >
                         {fmt.icon}
                         <span>{fmt.label}</span>
                     </button>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Main Save Button */}
