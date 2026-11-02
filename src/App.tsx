@@ -71,6 +71,7 @@ export default function App() {
         retryQueueItem,
         markSaved,
         clearError,
+        updateCommand,
         getModelStorage,
         deleteModel,
         deleteAllModels,
@@ -392,7 +393,7 @@ export default function App() {
                 {showModels ? (
                     <ModelsPage models={models} storage={modelStorage} currentModel={currentModel} isTranscribing={isTranscribing} isModelLoading={isModelLoading} download={modelDownload} downloadError={modelDownloadError} onBack={() => setShowModels(false)} onRefresh={getModelStorage} onDownload={downloadModel} onCancelDownload={cancelModelDownload} onUse={loadModel} onRemove={deleteModel} onRemoveAll={deleteAllModels} />
                 ) : showSettings ? (
-                    <SettingsPage logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} />
+                    <SettingsPage logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} updateCommand={updateCommand} updateBlocked={isTranscribing || isModelLoading || hasUnsaved(queue)} />
                 ) : (<>
                 {/* ═══════════════ MAIN CONTENT ═══════════════ */}
                 <main className="flex-1 flex flex-col min-w-0 min-h-0 p-5 gap-4 overflow-y-auto">

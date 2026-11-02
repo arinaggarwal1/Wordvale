@@ -62,6 +62,7 @@ interface UseWhisperReturn {
     retryQueueItem: (id: string) => void;
     markSaved: (id: string, view: "original" | "english") => void;
     processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string) => Promise<void>;
+    updateCommand: (command: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
     clearError: () => void;
     getSystemInfo: () => Promise<void>;
     getModelStorage: () => Promise<void>;
@@ -664,6 +665,7 @@ export function useWhisper(): UseWhisperReturn {
         retryQueueItem,
         markSaved,
         processQueue,
+        updateCommand: sendCommand,
         clearError,
         getSystemInfo,
         getModelStorage,

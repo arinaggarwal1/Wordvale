@@ -362,7 +362,11 @@ git tag v0.1.0-alpha
 git push origin v0.1.0-alpha
 ```
 
-The release must include an asset named `Wordvale-macOS-arm64.dmg` for the Settings update check to find it. The check includes prereleases and compares version tags numerically. It opens the GitHub release page; download the DMG and drag the app to Applications to upgrade. Existing installations without the update check need this manual upgrade first. The DMG is currently unsigned and unnotarized.
+The release must include an asset named `Wordvale-macOS-arm64.dmg`. GitHub must report its `sha256:` digest and size in the release API; the app checks these before staging an update. The updater accepts stable, three-part version tags and ignores prereleases. Version numbers in the package, app bundle, Cargo manifest, and release tag must match.
+
+In **Settings → Updates**, check for a release, download it, then choose **Install and restart** after saving your transcripts and finishing active work. The updater supports the packaged Apple silicon app in a writable location, stages the verified app beside the existing bundle, and keeps the previous bundle in the staging folder for recovery. Development builds can check but cannot install updates. If replacement or relaunch fails, it attempts to restore the previous app.
+
+Install the first release containing the updater manually from its DMG; older versions cannot install updates themselves. The DMG and app are currently unsigned and unnotarized. The checksum verifies the artifact against GitHub’s release metadata; it is not an independent code-signing signature.
 
 ## Design Choices
 

@@ -2,3 +2,5 @@ openai-whisper
 torch
 psutil
 imageio-ffmpeg
+
+certifi

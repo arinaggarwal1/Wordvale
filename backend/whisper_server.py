@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional
 import imageio_ffmpeg
 
 from model_registry import get_all_models, get_model_info, get_model_names, MODEL_REGISTRY
+from updater import AppUpdater
 
 # Shared user data directory
 APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/Wordvale")
@@ -232,6 +233,7 @@ class WhisperServer:
         self._download_thread: Optional[threading.Thread] = None
         self._download_cancel = threading.Event()
         self._ffmpeg_path = self._resolve_ffmpeg_path()
+        self._updater = AppUpdater()
 
     def _send_response(self, response: Dict[str, Any]) -> None:
         """Send a JSON response line to stdout."""
@@ -902,6 +904,22 @@ class WhisperServer:
             elif cmd == "transcribe_file":
                 result = self._transcribe_file(params)
 
+            elif cmd == "update_status":
+                result = {"status": "ok", "update": self._updater.snapshot()}
+
+            elif cmd == "update_check":
+                result = {"status": "ok", "update": self._updater.check(params.get("current_version", ""))}
+
+            elif cmd == "update_download":
+                result = {"status": "ok", "update": self._updater.start_download()}
+
+            elif cmd == "update_install":
+                if self._transcription_thread and self._transcription_thread.is_alive():
+                    raise ValueError("Finish transcription before installing an update.")
+                if self._download_thread and self._download_thread.is_alive():
+                    raise ValueError("Finish the model download before installing an update.")
+                result = {"status": "ok", "update": self._updater.install(params.get("app_pid"))}
+
             elif cmd == "cancel_transcription":
                 self._cancel_event.set()
                 if self._active_process:
@@ -953,7 +971,11 @@ class WhisperServer:
                     })
                     continue
 
-                if command.get("command") in ("download_model", "load_model"):
+                if command.get("command") == "update_check":
+                    def run_update_check(request):
+                        self._send_response(self._handle_command(request))
+                    threading.Thread(target=run_update_check, args=(command,), daemon=True).start()
+                elif command.get("command") in ("download_model", "load_model"):
                     if self._download_thread and self._download_thread.is_alive():
                         self._send_response({"type": "response", "id": command.get("id"), "data": {"status": "error", "error": "Another model operation is in progress."}})
                         continue
