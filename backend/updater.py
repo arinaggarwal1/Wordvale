@@ -220,6 +220,9 @@ class AppUpdater:
             helper = self.folder / "install.sh"
             helper.write_text(HELPER)
             backup = self.staged.parent / "Previous-Wordvale.app"
-            subprocess.Popen(["/bin/sh", str(helper), str(app_pid), str(self.staged), str(self.target), str(backup)], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # A frozen backend carries PyInstaller's private extraction state.
+            # The new app and its sidecar must not inherit that state on relaunch.
+            clean_env = {key: value for key, value in os.environ.items() if not key.startswith("_PYI_")}
+            subprocess.Popen(["/bin/sh", str(helper), str(app_pid), str(self.staged), str(self.target), str(backup)], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=clean_env)
             self.update(status="installing", message="Installing update. Wordvale will reopen.")
             return self.snapshot()

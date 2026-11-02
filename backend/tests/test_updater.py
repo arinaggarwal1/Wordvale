@@ -110,5 +110,21 @@ class UpdateTests(unittest.TestCase):
         with self.assertRaises(ValueError): obj.install(123)
         with self.assertRaises(ValueError): obj.start_download()
 
+    def test_install_does_not_pass_pyinstaller_state_to_relaunch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            obj = updater.AppUpdater()
+            obj.folder = root
+            obj.staged = root / "staged.app"
+            obj.target = root / "installed.app"
+            obj.state["status"] = "ready"
+            with patch.object(updater, "app_target", return_value=obj.target), \
+                 patch.dict(updater.os.environ, {"_PYI_APPLICATION_HOME_DIR": "/stale", "WORDVALE_TEST": "kept"}), \
+                 patch.object(updater.subprocess, "Popen") as spawn:
+                obj.install(123)
+            env = spawn.call_args.kwargs["env"]
+            self.assertNotIn("_PYI_APPLICATION_HOME_DIR", env)
+            self.assertEqual(env["WORDVALE_TEST"], "kept")
+
 
 if __name__ == "__main__": unittest.main()

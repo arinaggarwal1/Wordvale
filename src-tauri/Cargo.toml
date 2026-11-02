@@ -1,6 +1,6 @@
 [package]
 name = "wordvale"
-version = "0.1.3"
+version = "0.1.4"
 description = "Wordvale - Offline Audio Transcription"
 authors = ["Wordvale"]
 license = "MIT"

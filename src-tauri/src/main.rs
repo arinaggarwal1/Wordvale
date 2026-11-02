@@ -79,6 +79,13 @@ fn save_transcript_copy(directory: String, filename: String, content: String) ->
 fn app_process_id() -> u32 { std::process::id() }
 
 fn main() {
+    // An older updater may have relaunched us with its PyInstaller extraction
+    // state. Never pass that stale state to a new backend sidecar.
+    for (key, _) in std::env::vars_os() {
+        if key.to_string_lossy().starts_with("_PYI_") {
+            std::env::remove_var(key);
+        }
+    }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![get_file_metadata, open_in_finder, save_transcript_copy, app_process_id])
         .run(tauri::generate_context!())
