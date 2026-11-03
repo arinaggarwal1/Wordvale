@@ -4,6 +4,8 @@
 
 <p align="center"><a href="#get-started">Get started</a> · <a href="#what-you-can-do">Features</a> · <a href="#run-from-source">Run from source</a> · <a href="#github-releases">Releases</a> · <a href="https://buymeacoffee.com/Arin11a">Buy me a coffee</a></p>
 
+<p align="center"><a href="https://github.com/arinaggarwal1/Wordvale/releases/tag/v0.3.0-alpha.1"><strong>Download Wordvale 0.3.0-alpha.1 for macOS (Apple silicon)</strong></a></p>
+
 ---
 
 ## From recording to words
@@ -458,3 +460,7 @@ The best files to start with are:
 - `src-tauri/tauri.conf.json`
 
 Those files explain most of the real architecture faster than reading the UI components first.
+
+### Firebase client configuration
+
+The API key in `src/firebase.ts` is Firebase client configuration distributed with the app, not a server credential. Its Google Cloud API restrictions allow only `identitytoolkit.googleapis.com` and `securetoken.googleapis.com`. Do not broaden this key to AI, billing, or other Google APIs; use separate credentials for additional services. See [Firebase API key guidance](https://firebase.google.com/docs/projects/api-keys).
