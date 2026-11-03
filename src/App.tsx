@@ -54,6 +54,8 @@ export default function App() {
     const [libraryError, setLibraryError] = useState<string | null>(null);
     const [librarySaveIds, setLibrarySaveIds] = useState<string[] | null>(null);
     const [pendingModelDownload, setPendingModelDownload] = useState<string | null>(null);
+    const [startupComplete, setStartupComplete] = useState(false);
+    const [startupSlow, setStartupSlow] = useState(false);
 
     const {
         isBackendReady,
@@ -88,6 +90,18 @@ export default function App() {
         deleteModel,
         deleteAllModels,
     } = useWhisper();
+
+    useEffect(() => {
+        if (startupComplete || !isBackendReady || !modelStorage || isModelLoading) return;
+        const timer = window.setTimeout(() => setStartupComplete(true), 400);
+        return () => window.clearTimeout(timer);
+    }, [startupComplete, isBackendReady, modelStorage, isModelLoading]);
+
+    useEffect(() => {
+        if (startupComplete) return;
+        const timer = window.setTimeout(() => setStartupSlow(true), 20000);
+        return () => window.clearTimeout(timer);
+    }, [startupComplete]);
 
     const [settings, setSettings] = useState<AdvancedSettings>(DEFAULT_SETTINGS);
     const [selectedLanguage, setSelectedLanguage] = useState("auto");
@@ -355,6 +369,27 @@ export default function App() {
             setSelectedTranscriptView("original");
         }
     }, [displayedResult]);
+
+    if (!startupComplete) {
+        const startupError = Boolean(error);
+        return <main className="startup-screen" aria-busy={!startupError}>
+            <div className="startup-content">
+                <div className="startup-mark" aria-hidden="true"><AudioWaveform size={48} strokeWidth={1.6} /></div>
+                <h1>Wordvale</h1>
+                <p className="startup-tagline">Your words, kept yours.</p>
+                <div className="startup-status" role="status" aria-live="polite">
+                    {!startupError && <span className="startup-indicator" aria-hidden="true" />}
+                    <span>{startupError ? "Couldn’t finish starting" : isBackendReady ? (isModelLoading ? "Preparing your model…" : "Getting your workspace ready…") : "Starting your local transcription engine…"}</span>
+                </div>
+                {startupError && <p className="startup-error">{error}</p>}
+                {(startupError || startupSlow) && <div className="startup-actions">
+                    {startupError && <button className="btn-primary" onClick={() => window.location.reload()}>Try again</button>}
+                    <button className="btn-ghost" onClick={() => setStartupComplete(true)}>Open Wordvale</button>
+                </div>}
+            </div>
+            <p className="startup-footer">Private transcription, on your Mac</p>
+        </main>;
+    }
 
     return (
         <div className="h-screen flex flex-col bg-surface-950">

@@ -12,7 +12,7 @@ export type ThemeId = typeof themes[number]["id"];
 const storageKey = "wordvale.theme";
 export function getTheme(): ThemeId {
     try {
-        const saved = localStorage.getItem(storageKey);
+        const saved = localStorage.getItem(storageKey) ?? localStorage.getItem("whisper" + "desk.theme");
         return themes.find((theme) => theme.id === saved)?.id ?? "reading";
     } catch { return "reading"; }
 }

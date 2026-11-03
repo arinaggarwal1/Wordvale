@@ -261,6 +261,21 @@ body {
 }
 
 /* Reading Room: a calm, task-led desktop shell. */
+.startup-screen { position:relative; display:grid; place-items:center; min-height:100vh; padding:32px; overflow:hidden; background:rgb(var(--surface-950)); color:rgb(var(--surface-100)); }
+.startup-content { display:flex; flex-direction:column; align-items:center; max-width:440px; text-align:center; }
+.startup-mark { display:grid; place-items:center; width:96px; height:96px; margin-bottom:28px; border-radius:26px; background:rgb(var(--accent-500)); color:var(--on-accent); box-shadow:0 14px 32px rgb(0 0 0 / .14); transition:transform 350ms cubic-bezier(.2,.7,.2,1); }
+.startup-mark:hover { transform:rotate(-5deg) scale(1.05); }
+.startup-mark svg path { stroke-dasharray:100; stroke-dashoffset:0; animation:startup-wave 2.8s ease-in-out infinite; }
+.startup-content h1 { font-size:26px; font-weight:700; letter-spacing:-.025em; }
+.startup-tagline { margin-top:6px; color:rgb(var(--surface-400)); font-size:14px; }
+.startup-status { display:flex; align-items:center; justify-content:center; gap:9px; margin-top:38px; color:rgb(var(--surface-400)); font-size:12px; }
+.startup-indicator { width:7px; height:7px; border-radius:50%; background:rgb(var(--accent-400)); animation:startup-pulse 1.6s ease-in-out infinite; }
+.startup-error { margin-top:12px; color:rgb(var(--status-danger)); font-size:12px; line-height:1.5; }
+.startup-actions { display:flex; gap:8px; margin-top:20px; }
+.startup-footer { position:absolute; bottom:28px; color:rgb(var(--surface-500)); font-size:11px; }
+@keyframes startup-wave { 0%, 100% { stroke-dashoffset:0; } 45% { stroke-dashoffset:100; } 85% { stroke-dashoffset:0; } }
+@keyframes startup-pulse { 0%, 100% { opacity:.45; } 50% { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .startup-mark, .startup-mark svg path, .startup-indicator { animation:none; transition:none; } .startup-mark:hover { transform:none; } }
 .app-navigation { width: 288px; min-height:0; flex: none; display: flex; flex-direction: column; padding: 28px 16px 22px; background: rgb(var(--theme-sidebar)); border-right: 1px solid rgb(var(--surface-800)); transition: width 220ms cubic-bezier(.2,.7,.2,1), padding 220ms cubic-bezier(.2,.7,.2,1); }
 .app-brand { display:flex; align-items:center; gap:11px; padding: 0 8px 20px; }
 .app-brand-icon { display:grid; place-items:center; width:36px; height:36px; border-radius:10px; background:rgb(var(--accent-500)); color:var(--on-accent); }
@@ -389,6 +404,12 @@ body {
 .appearance-heading > span { color:rgb(var(--surface-500)); font-size:11px; white-space:nowrap; }
 .theme-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; margin-top:20px; }
 .settings-section { margin-top:24px; }
+.support-row { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; padding:20px; border:1px solid rgb(var(--surface-800)); border-radius:12px; background:rgb(var(--surface-900)); }
+.support-row strong { color:rgb(var(--surface-100)); font-size:14px; font-weight:650; }
+.support-row p { margin-top:4px; color:rgb(var(--surface-400)); font-size:12px; }
+.support-button { display:inline-flex; align-items:center; justify-content:center; gap:9px; padding:10px 14px; border:1px solid rgb(var(--surface-700)); border-radius:9px; background:rgb(var(--surface-850)); color:rgb(var(--surface-100)); font-size:13px; font-weight:600; transition:background 150ms ease,border-color 150ms ease; }
+.support-button:hover { background:rgb(var(--surface-800)); border-color:rgb(var(--accent-400)); }
+.support-button:focus-visible { outline:2px solid rgb(var(--accent-400)); outline-offset:2px; }
 .theme-option { position:relative; min-width:0; display:flex; align-items:center; gap:13px; padding:13px; border:1px solid rgb(var(--surface-800)); border-radius:12px; text-align:left; color:rgb(var(--surface-100)); cursor:pointer; transition:transform 160ms ease,border-color 160ms ease,background 160ms ease,box-shadow 160ms ease; }
 .theme-option:hover { transform:translateY(-2px); background:rgb(var(--surface-850)); border-color:rgb(var(--surface-600)); }
 .theme-option.is-selected { border-color:rgb(var(--accent-400)); background:rgb(var(--theme-selected)); box-shadow:0 0 0 1px rgb(var(--accent-400) / .16),0 5px 16px rgb(var(--surface-50) / .08); }

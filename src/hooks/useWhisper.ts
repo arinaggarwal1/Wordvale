@@ -334,11 +334,11 @@ export function useWhisper(): UseWhisperReturn {
         if (restoredModel.current || !isBackendReady || !modelStorage || models.length === 0) return;
         restoredModel.current = true;
         let saved: string | null = null;
-        try { saved = localStorage.getItem(LAST_MODEL_KEY); } catch { /* Storage can be unavailable. */ }
+        try { saved = localStorage.getItem(LAST_MODEL_KEY) ?? localStorage.getItem("whisper" + "desk.lastModel"); } catch { /* Storage can be unavailable. */ }
         if (saved && modelStorage.downloaded_models.some((model) => model.name === saved)) {
             void loadModel(saved);
         } else if (saved) {
-            try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
+            try { localStorage.removeItem(LAST_MODEL_KEY); localStorage.removeItem("whisper" + "desk.lastModel"); } catch { /* Ignore unavailable storage. */ }
         }
     }, [isBackendReady, modelStorage, models]);
 
@@ -469,7 +469,7 @@ export function useWhisper(): UseWhisperReturn {
             }
             if (currentModel === modelName) {
                 setCurrentModel(null);
-                try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
+                try { localStorage.removeItem(LAST_MODEL_KEY); localStorage.removeItem("whisper" + "desk.lastModel"); } catch { /* Ignore unavailable storage. */ }
                 setSystemInfo((prev) =>
                     prev ? { ...prev, current_model: null, model_loaded: false } : prev
                 );
@@ -493,12 +493,12 @@ export function useWhisper(): UseWhisperReturn {
                 const deleted = result.deleted_models as string[];
                 if (currentModel && deleted.includes(currentModel)) {
                     setCurrentModel(null);
-                    try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
+                    try { localStorage.removeItem(LAST_MODEL_KEY); localStorage.removeItem("whisper" + "desk.lastModel"); } catch { /* Ignore unavailable storage. */ }
                 }
                 throw new Error("Some models could not be removed. Refresh the list and try again.");
             }
             setCurrentModel(null);
-            try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
+            try { localStorage.removeItem(LAST_MODEL_KEY); localStorage.removeItem("whisper" + "desk.lastModel"); } catch { /* Ignore unavailable storage. */ }
             setSystemInfo((prev) =>
                 prev ? { ...prev, current_model: null, model_loaded: false } : prev
             );

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="310" viewBox="0 0 1200 310" role="img" aria-labelledby="title desc">
+<title id="title">Wordvale</title><desc id="desc">Private transcription for Mac. Your words stay yours.</desc>
+<rect width="1200" height="310" rx="22" fill="#172a26"/>
+<rect x="54" y="54" width="56" height="56" rx="15" fill="#426c59"/>
+<path d="M68 86a3 3 0 0 0 3-3v-6a3 3 0 0 1 6 0v19a3 3 0 0 0 6 0V72a3 3 0 0 1 6 0v19a3 3 0 0 0 6 0v-6a3 3 0 0 1 3-3" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="54" y="171" fill="#f6f8f3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="66" font-weight="700" letter-spacing="-2">Wordvale</text>
+<text x="56" y="213" fill="#b9c9bf" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="22">Your recordings. Your words. Your Mac.</text>
+<path d="M758 225h388M758 248h388M758 271h388" stroke="#789588" stroke-opacity=".25"/>
+<path d="M774 191v-14m24 25v-38m24 45v-56m24 63v-70m24 44v-20m24 51v-82m24 62v-43m24 30v-18m24 45v-55m24 36v-27m24 56v-75m24 51v-33m24 43v-60m24 42v-22m24 28v-35" stroke="#9dc5a9" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+</svg>

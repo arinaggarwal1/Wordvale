@@ -1,17 +1,55 @@
-# Wordvale
+<p align="center"><img src="docs/wordvale-banner.svg" alt="Wordvale — Your recordings. Your words. Your Mac." width="100%"></p>
 
-Offline transcription for macOS, built with React, Tauri, and a bundled Python backend around `whisper.cpp`.
+<p align="center"><strong>Offline transcription, made at home on your Mac.</strong><br>Turn recordings into readable, searchable text without sending your audio to a transcription service.</p>
 
-Wordvale lets you drop in audio or video files, choose a Whisper model, and run transcription locally on your own machine. It is designed for privacy-first desktop use: no cloud upload, no API key, and no usage caps.
+<p align="center"><a href="#get-started">Get started</a> · <a href="#what-you-can-do">Features</a> · <a href="#run-from-source">Run from source</a> · <a href="#github-releases">Releases</a> · <a href="https://buymeacoffee.com/Arin11a">Buy me a coffee</a></p>
 
-## At a Glance
+---
 
-- Runs transcription fully on-device
-- Supports multiple Whisper models, including multilingual and English-only variants
-- Queues multiple files and processes them one at a time
-- Exports transcripts as plain text, timestamped text, SRT, or JSON
-- Packages the Python backend as a Tauri sidecar for distribution
-- Stores downloaded models outside the app bundle so app updates stay small
+## From recording to words
+
+**01 · Bring your audio** — Drop in a recording or video, or choose files from Finder. Queue several at once.
+
+**02 · Choose your model** — Pick the balance of speed, accuracy, and storage. Download a model once; use it offline afterward.
+
+**03 · Make it useful** — Review the transcript, save it to your local library, and export it in the format you need.
+
+## What you can do
+
+| | |
+| :--- | :--- |
+| **Private by design** | Audio processing and transcription run locally. No cloud account or transcription API required. |
+| **A model for the job** | Compare multilingual and English-only Whisper models, download them, and switch between them. |
+| **A queue that works for you** | Import multiple recordings, track progress, reorder pending items, and cancel processing. |
+| **Your library, on your Mac** | Save, revisit, search, and organize transcripts and linked or locally copied recordings. |
+| **Export your way** | Save plain text, timed text, SRT, JSON, or karaoke ASS when reliable word timestamps are available. |
+| **Made for your workspace** | Choose a curated theme and keep your last used model and appearance. |
+
+## Get started
+
+Download the latest macOS DMG from the project's Releases page, open it, and drag Wordvale into Applications. The packaged build targets **Apple silicon** Macs. Open the app, select a recording, and start transcription.
+
+The first time you use a model, it needs an internet connection to download. Afterward, the model runs locally. Checking for app updates also uses the internet.
+
+## Run from source
+
+With Node.js, Rust, Python, and the project's macOS runtime dependencies installed:
+
+```bash
+npm install
+npm run tauri dev
+```
+
+To package a local Apple silicon DMG:
+
+```bash
+npm run dist:mac
+```
+
+The script builds the app and copies the DMG to `~/Downloads`. For frontend-only work, `npm run dev` runs the interface in a browser with a mock backend; use the Tauri command for real transcription.
+
+<details>
+<summary><strong>How it works under the hood</strong></summary>
 
 ## How It Works, In Normal People Terms
 
@@ -360,6 +398,8 @@ Open **Library** from the transcription sidebar to keep recordings and transcrip
 When saving audio, **Link to original** leaves the recording in place and requires that the file remain available. **Copy into library** stores a separate managed copy. Removing a linked recording never deletes the original; removing a managed recording deletes its library copy. The local database and any managed recordings are stored under `~/Library/Application Support/Wordvale/library`.
 
 Use **Add to queue** on a library recording to transcribe it again. A successful run replaces the item's saved transcript, including any previous translation; a cancelled or failed run leaves the existing transcript intact. Clearing the queue does not remove library items.
+
+</details>
 
 ## GitHub Releases
 

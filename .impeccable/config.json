@@ -6,5 +6,20 @@
       "maxChars": 8000
     }
   },
-  "buildPath": "code"
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-11-03T08:31:40.489Z",
+        "reason": "Existing Reading Room theme palette is mirrored for the startup fallback."
+      }
+    ]
+  }
 }

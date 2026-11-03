@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, ExternalLink, RefreshCw, RotateCw } from "lucide-react";
+import { ArrowLeft, Coffee, Download, ExternalLink, RefreshCw, RotateCw } from "lucide-react";
 import { open } from "@tauri-apps/api/shell";
 import { invoke } from "@tauri-apps/api/tauri";
 import { exit } from "@tauri-apps/api/process";
@@ -107,6 +107,7 @@ export default function SettingsPage({ onBack, updateCommand, updateBlocked, ...
                 <p role="status" className="text-xs text-surface-300 mt-3">{connectionError || update.message}</p>
             </section>
             <div className="settings-section"><BackendDebugPanel {...props} /></div>
+            <div className="support-row settings-section"><div><strong>Enjoying Wordvale?</strong><p>Support its independent development.</p></div><button type="button" className="support-button" onClick={() => void open("https://buymeacoffee.com/Arin11a")}><Coffee size={18} aria-hidden="true" /> Buy me a coffee <ExternalLink size={14} aria-hidden="true" /></button></div>
         </div>
         </div>
     </main>;

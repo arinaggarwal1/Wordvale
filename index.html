@@ -5,9 +5,31 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wordvale</title>
+    <script>
+      (() => {
+        const palettes = { reading: ['#faf8f3','#426c59','#253d3b','#62746d','#fff'], paper: ['#faf9f6','#426987','#30343a','#6b7580','#fff'], graphite: ['#17211f','#416e56','#f0f1f2','#aab4b7','#fff'], midnight: ['#172433','#3b6887','#edf2f8','#a8b9cb','#fff'], dusk: ['#251e29','#77547f','#f3eff4','#bcadc1','#fff'], light: ['#f5f5f5','#705681','#303030','#6e6e6e','#fff'], dark: ['#191919','#5b456f','#f0f0f0','#a8a8a8','#fff'], amber: ['#181818','#f0b724','#f4f4f4','#a9a9a9','#201a0a'] };
+        let theme = 'reading';
+        try { theme = localStorage.getItem('wordvale.theme') || localStorage.getItem('whisper' + 'desk.theme') || theme; } catch (_) {}
+        const colors = palettes[theme] || palettes.reading;
+        const root = document.documentElement;
+        root.style.backgroundColor = colors[0];
+        colors.forEach((color, i) => root.style.setProperty(['--boot-bg','--boot-accent','--boot-text','--boot-muted','--boot-on-accent'][i], color));
+      })();
+    </script>
+    <style>
+      html,body { margin:0; min-height:100%; background:var(--boot-bg,#faf8f3); }
+      .boot { min-height:100vh; display:grid; place-items:center; background:var(--boot-bg); color:var(--boot-text); font-family:-apple-system,BlinkMacSystemFont,sans-serif; text-align:center; }
+      .boot-mark { display:grid; place-items:center; width:96px; height:96px; margin:0 auto 28px; border-radius:26px; background:var(--boot-accent); color:var(--boot-on-accent); }
+      .boot-mark path { stroke-dasharray:100; stroke-dashoffset:0; animation:boot-draw 2.8s ease-in-out infinite; }
+      .boot h1 { margin:0; font-size:26px; letter-spacing:-.025em; }
+      .boot p { margin:6px 0 0; font-size:14px; color:var(--boot-muted); }
+      .boot .boot-status { margin-top:38px; font-size:12px; }
+      @keyframes boot-draw { 0%,100% { stroke-dashoffset:0; } 45% { stroke-dashoffset:100; } 85% { stroke-dashoffset:0; } }
+      @media (prefers-reduced-motion:reduce) { .boot-mark path { animation:none; } }
+    </style>
   </head>
   <body class="bg-surface-950 text-surface-100 font-sans antialiased">
-    <div id="root"></div>
+    <div id="root"><main class="boot" aria-label="Starting Wordvale"><div><div class="boot-mark"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2" /></svg></div><h1>Wordvale</h1><p>Your words, kept yours.</p><p class="boot-status">Starting your local transcription engine…</p></div></main></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

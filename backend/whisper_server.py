@@ -50,6 +50,10 @@ def parse_whisper_progress(line: str) -> Optional[int]:
 
 # Shared user data directory
 APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/Wordvale")
+_legacy_support = os.path.expanduser("~/Library/Application Support/" + "Whisper" + "Desk")
+if not os.path.exists(APP_SUPPORT_DIR) and os.path.isdir(_legacy_support):
+    # Preserve existing library paths and downloaded models without moving data.
+    APP_SUPPORT_DIR = _legacy_support
 MODELS_DIR = os.path.join(APP_SUPPORT_DIR, "models")
 
 # Paths
