@@ -50,6 +50,10 @@ npm run dist:mac
 
 The script builds the app and copies the DMG to `~/Downloads`. For frontend-only work, `npm run dev` runs the interface in a browser with a mock backend; use the Tauri command for real transcription.
 
+## Find your way around
+
+The [repository map](docs/REPOSITORY.md) explains where the frontend, native app, recorder, backend, tests, and generated build files live.
+
 <details>
 <summary><strong>How it works under the hood</strong></summary>
 
@@ -134,17 +138,9 @@ Important files:
 
 The frontend does not do transcription itself. It is an orchestration and presentation layer.
 
-### 3. Tauri / Rust Layer
+### 3. Tauri / Native Layer
 
-The Rust layer in `src-tauri/src/main.rs` is intentionally small.
-
-It mainly:
-
-- Registers a few native commands such as file metadata lookup and opening folders in Finder
-- Hosts the Tauri app shell
-- Enables the frontend to spawn the backend sidecar through Tauri shell APIs
-
-This is a thin native bridge, not the main transcription engine.
+The Tauri shell in `src-tauri/` hosts the app, exposes native commands to the frontend, manages local files and app integration, and coordinates the recording helper. The Swift audio-capture helper lives in `recorder/`; transcription itself remains in the Python backend.
 
 ### 4. Python Backend
 
@@ -320,15 +316,7 @@ This makes backend iteration faster because you do not need to rebuild the sidec
 
 ### 12. Repo Layout
 
-```text
-src/                    React UI
-src/components/         UI panels and controls
-src/hooks/              Frontend orchestration hook
-src-tauri/              Tauri config and Rust entry point
-backend/                Python backend, model registry, packaging scripts
-backend/runtime/        Vendored whisper runtime assets
-scripts/                Release helper scripts
-```
+See [docs/REPOSITORY.md](docs/REPOSITORY.md) for the feature-oriented source map and the distinction between versioned runtime inputs and generated local files.
 
 ## Development Setup
 
@@ -445,7 +433,7 @@ Some decisions in this repo are deliberate and worth calling out:
 A few practical constraints are worth knowing up front:
 
 - The bundled runtime in this repo is macOS Apple Silicon-focused
-- There is currently no automated test suite in the repo
+- Frontend and backend test files are available under `tests/` and `backend/tests/`
 - The browser/mock mode is for UI development only, not real transcription
 - First-time model load may take a while because the model is downloaded on demand
 
