@@ -1,0 +1,1 @@
+{"auth":{"providers":{"emailPassword":true,"googleSignIn":{"oAuthBrandDisplayName":"Wordvale","supportEmail":"arinaggarwal1@gmail.com","authorizedRedirectUris":["https://wordvale-auth-20261103.firebaseapp.com/__/auth/handler","http://localhost"]}}}}

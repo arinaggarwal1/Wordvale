@@ -111,6 +111,10 @@ else
     cp -R "$RUNTIME_SOURCE_DIR/." "$RESOURCE_DIR/"
 fi
 
+FFMPEG_BIN="$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')"
+cp "$FFMPEG_BIN" "$RESOURCE_DIR/ffmpeg"
+chmod +x "$RESOURCE_DIR/ffmpeg"
+
 if find "$RESOURCE_DIR" -type f \( -name 'ggml-*.bin' -o -name '*.gguf' \) | grep -q .; then
     echo "Refusing to package model files inside bundle_resources."
     exit 1

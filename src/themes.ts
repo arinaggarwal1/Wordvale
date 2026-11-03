@@ -19,4 +19,7 @@ export function getTheme(): ThemeId {
 export function applyTheme(theme: ThemeId): void {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem(storageKey, theme); } catch { /* Theme still applies for this session. */ }
+    if ("__TAURI__" in window) {
+        void import("@tauri-apps/api/tauri").then(({ invoke }) => invoke("set_theme_dock_icon", { theme })).catch((error) => console.warn("Could not update the Dock icon:", error));
+    }
 }

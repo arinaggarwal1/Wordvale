@@ -24,7 +24,9 @@ def release(tag="v0.1.2", content=b"installer"):
 class UpdateTests(unittest.TestCase):
     def test_version_order_and_invalid_versions(self):
         self.assertGreater(updater.version_tuple("v0.10.0"), updater.version_tuple("0.9.9"))
-        for value in ("v0.1", "0.1.1-alpha", "0.01.1", "v1.0.0/../../x"):
+        self.assertLess(updater.version_tuple("1.0.0-alpha.2"), updater.version_tuple("1.0.0-alpha.10"))
+        self.assertLess(updater.version_tuple("1.0.0-rc.1"), updater.version_tuple("1.0.0"))
+        for value in ("v0.1", "0.1.1-alpha.01", "0.01.1", "v1.0.0/../../x"):
             with self.subTest(value=value), self.assertRaises(ValueError): updater.version_tuple(value)
 
     def test_reject_untrusted_assets_and_bad_metadata(self):
@@ -42,12 +44,23 @@ class UpdateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             handler.redirect_request(request, None, 302, "", {}, "https://evil.example/update")
 
-    def test_no_downgrade_and_stable_only(self):
-        for candidate, expected in ((release("v0.1.0"), "current"), (release("v0.1.1"), "current"), (release(), "available"), ({**release(), "prerelease": True}, "error")):
-            with self.subTest(candidate=candidate), patch.object(updater.urllib.request, "build_opener") as factory:
-                factory.return_value.open.return_value = io.BytesIO(json.dumps(candidate).encode())
+    def test_no_downgrade_and_prereleases(self):
+        for candidates, current, expected, latest in (([release("v0.1.0")], "0.1.1", "current", "0.1.0"), ([release("v0.1.1")], "0.1.1", "current", "0.1.1"), ([release(), {**release("v0.2.0-alpha.1"), "prerelease": True}], "0.1.1", "available", "0.2.0-alpha.1"), ([release("v0.2.0-alpha.2"), release("v0.2.0-alpha.10"), {**release("v9.0.0"), "draft": True}], "0.2.0-alpha.2", "available", "0.2.0-alpha.10"), ([release("v0.2.0-alpha.1")], "0.2.0", "current", "0.2.0-alpha.1")):
+            with self.subTest(candidates=candidates), patch.object(updater.urllib.request, "build_opener") as factory:
+                factory.return_value.open.return_value = io.BytesIO(json.dumps(candidates).encode())
                 obj = updater.AppUpdater()
-                self.assertEqual(obj.check("0.1.1")["status"], expected)
+                result = obj.check(current)
+                self.assertEqual(result["status"], expected)
+                self.assertEqual(result["latest_version"], latest)
+
+    def test_paginates_and_ignores_invalid_tags(self):
+        first = [release("v0.1.0")] * 99 + [release("not-a-version")]
+        second = [release("v0.3.0-beta.1")]
+        with patch.object(updater.urllib.request, "build_opener") as factory:
+            factory.return_value.open.side_effect = [io.BytesIO(json.dumps(first).encode()), io.BytesIO(json.dumps(second).encode())]
+            result = updater.AppUpdater().check("0.2.0")
+        self.assertEqual(result["latest_version"], "0.3.0-beta.1")
+        self.assertEqual(result["status"], "available")
 
     def test_bad_checksum_and_wrong_size_leave_installation_untouched(self):
         for content in (b"tampered!", b"short"):
@@ -66,15 +79,15 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.object(updater.urllib.request, "build_opener") as factory:
             target = pathlib.Path(directory) / "Wordvale.app"
             target.mkdir(); (target / "old").write_text("original")
-            obj = updater.AppUpdater(); obj.target = target; obj.asset = release(content=content)["assets"][0]
-            obj.state["latest_version"] = "0.1.2"
+            obj = updater.AppUpdater(); obj.target = target; obj.asset = release("v0.1.2-alpha.1", content)["assets"][0]
+            obj.state["latest_version"] = "0.1.2-alpha.1"
             factory.return_value.open.return_value = io.BytesIO(content)
             def fake_run(command, **_kwargs):
                 if command[0].endswith("hdiutil") and command[1] == "attach":
                     mount = pathlib.Path(command[command.index("-mountpoint") + 1])
                     contents = mount / "Wordvale.app" / "Contents"
                     (contents / "MacOS").mkdir(parents=True)
-                    (contents / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "com.wordvale.app", "CFBundleShortVersionString": "0.1.2"}))
+                    (contents / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "com.wordvale.app", "CFBundleShortVersionString": "0.1.2-alpha.1"}))
                     (contents / "MacOS" / "Wordvale").write_text("binary")
                 elif command[0].endswith("ditto"):
                     pathlib.Path(command[2]).mkdir()

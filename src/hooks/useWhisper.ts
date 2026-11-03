@@ -56,7 +56,7 @@ interface UseWhisperReturn {
         task: string
     ) => Promise<TranscriptionResult>;
     cancelTranscription: () => Promise<void>;
-    addToQueue: (files: { path: string; size: number; libraryId?: string; fileName?: string }[]) => void;
+    addToQueue: (files: { path: string; size: number; libraryId?: string; fileName?: string }[]) => string[];
     removeFromQueue: (id: string) => void;
     reorderQueue: (fromIndex: number, toIndex: number) => void;
     retryQueueItem: (id: string) => void;
@@ -528,6 +528,7 @@ export function useWhisper(): UseWhisperReturn {
             };
         });
         setQueue((prev) => [...prev, ...newItems]);
+        return newItems.map((item) => item.id);
     }
 
     function removeFromQueue(id: string) {
@@ -600,12 +601,13 @@ export function useWhisper(): UseWhisperReturn {
 
                 try {
                     const transcribed = await transcribeFile(nextItem.filePath, settings, language, task);
-                    const result = nextItem.libraryId ? { ...transcribed, file: nextItem.fileName } : transcribed;
+                    const libraryId = queueRef.current.find((item) => item.id === nextItem.id)?.libraryId;
+                    const result = { ...transcribed, file: nextItem.fileName };
                     let savedViews: ("original" | "english")[] = [];
                     let saveError: string | undefined;
-                    if (nextItem.libraryId) {
+                    if (libraryId) {
                         try {
-                            await sendCommand("library_set_transcript", { id: nextItem.libraryId, transcript: result });
+                            await sendCommand("library_set_transcript", { id: libraryId, transcript: result });
                             savedViews = result.original && result.english ? ["original", "english"] : ["original"];
                             window.dispatchEvent(new Event("wordvale-library-changed"));
                         } catch (err) {

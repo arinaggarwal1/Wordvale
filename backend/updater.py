@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 REPOSITORY = "arinaggarwal1/Wordvale"
-API_URL = f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
+API_URL = f"https://api.github.com/repos/{REPOSITORY}/releases?per_page=100"
 MAX_DOWNLOAD = 1024 * 1024 * 1024
 ASSET_NAME = "Wordvale-macOS-arm64.dmg"
 HELPER = r'''#!/bin/sh
@@ -45,10 +45,21 @@ exit 1
 
 
 def version_tuple(value):
-    match = re.fullmatch(r"v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", value or "")
+    if not isinstance(value, str):
+        raise ValueError("The release does not have a supported version.")
+    match = re.fullmatch(r"v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?", value or "")
     if not match:
-        raise ValueError("The release does not have a supported stable version.")
-    return tuple(map(int, match.groups()))
+        raise ValueError("The release does not have a supported version.")
+    major, minor, patch, prerelease, _build = match.groups()
+    identifiers = []
+    for part in (prerelease or "").split(".") if prerelease else []:
+        if part.isdigit():
+            if len(part) > 1 and part.startswith("0"):
+                raise ValueError("The release does not have a supported version.")
+            identifiers.append((0, int(part)))
+        else:
+            identifiers.append((1, part))
+    return (int(major), int(minor), int(patch), 0 if prerelease else 1, tuple(identifiers))
 
 
 def app_target():
@@ -103,7 +114,7 @@ class AppUpdater:
         self.folder = None
         self.staged = None
         self.target = None
-        self.state = {"status": "idle", "current_version": None, "latest_version": None, "message": "", "progress": 0}
+        self.state = {"status": "idle", "current_version": None, "latest_version": None, "release_tag": None, "message": "", "progress": 0}
 
     def snapshot(self):
         with self.lock:
@@ -118,7 +129,7 @@ class AppUpdater:
             if self.state["status"] in ("checking", "downloading", "ready", "installing"):
                 return self.snapshot()
             self.asset = None
-            self.update(status="checking", current_version=current_version, latest_version=None, progress=0, message="Checking GitHub…")
+            self.update(status="checking", current_version=current_version, latest_version=None, release_tag=None, progress=0, message="Checking GitHub…")
         try:
             if getattr(sys, "frozen", False):
                 installed_plist = Path(sys.executable).resolve().parent.parent / "Info.plist"
@@ -129,13 +140,28 @@ class AppUpdater:
             current = version_tuple(current_version)
             request = urllib.request.Request(API_URL, headers={"Accept": "application/vnd.github+json", "User-Agent": "Wordvale-Updater"})
             opener = urllib.request.build_opener(GitHubRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=certifi.where())))
-            with opener.open(request, timeout=20) as response:
-                release = json.load(response)
-            if release.get("draft") or release.get("prerelease"):
-                raise ValueError("No stable release is available yet.")
+            releases = []
+            for page in range(1, 11):
+                page_request = request if page == 1 else urllib.request.Request(f"{API_URL}&page={page}", headers={"Accept": "application/vnd.github+json", "User-Agent": "Wordvale-Updater"})
+                with opener.open(page_request, timeout=20) as response:
+                    batch = json.load(response)
+                if not isinstance(batch, list):
+                    raise ValueError("GitHub returned an invalid release list.")
+                for candidate in batch:
+                    if not isinstance(candidate, dict) or candidate.get("draft"):
+                        continue
+                    try:
+                        releases.append((version_tuple(candidate.get("tag_name", "")), candidate))
+                    except ValueError:
+                        continue
+                if len(batch) < 100:
+                    break
+            if not releases:
+                raise ValueError("No supported release is available yet.")
+            release = max(releases, key=lambda item: item[0])[1]
             tag = release.get("tag_name", "")
             latest = version_tuple(tag)
-            self.update(latest_version=tag.lstrip("v"))
+            self.update(latest_version=tag.removeprefix("v"), release_tag=tag)
             if latest <= current:
                 self.update(status="current", message="You're up to date." if latest == current else "This build is newer than the latest published release.")
             else:

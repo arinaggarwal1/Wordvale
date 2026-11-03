@@ -1,13 +1,13 @@
 {
     "build": {
         "beforeBuildCommand": "npm run build",
-        "beforeDevCommand": "npm run dev",
+        "beforeDevCommand": "npm run build:recorder && npm run dev",
         "devPath": "http://localhost:1420",
         "distDir": "../dist"
     },
     "package": {
         "productName": "Wordvale",
-        "version": "0.2.0"
+        "version": "0.3.0-alpha.1"
     },
     "tauri": {
         "allowlist": {
@@ -72,7 +72,8 @@
                 "entitlements": null
             },
             "externalBin": [
-                "binaries/whisper-backend"
+                "binaries/whisper-backend",
+                "binaries/wordvale-recorder"
             ],
             "resources": [
                 "../backend/bundle_resources"

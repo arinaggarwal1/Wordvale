@@ -4206,8 +4206,9 @@ dependencies = [
 
 [[package]]
 name = "wordvale"
-version = "0.2.0"
+version = "0.3.0-alpha.1"
 dependencies = [
+ "objc",
  "serde",
  "serde_json",
  "tauri",

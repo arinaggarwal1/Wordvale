@@ -18,7 +18,7 @@
 
 | | |
 | :--- | :--- |
-| **Private by design** | Audio processing and transcription run locally. No cloud account or transcription API required. |
+| **Private by design** | Audio processing and transcription run locally. A Firebase account is used to sign in. |
 | **A model for the job** | Compare multilingual and English-only Whisper models, download them, and switch between them. |
 | **A queue that works for you** | Import multiple recordings, track progress, reorder pending items, and cancel processing. |
 | **Your library, on your Mac** | Save, revisit, search, and organize transcripts and linked or locally copied recordings. |
@@ -27,7 +27,7 @@
 
 ## Get started
 
-Download the latest macOS DMG from the project's Releases page, open it, and drag Wordvale into Applications. The packaged build targets **Apple silicon** Macs. Open the app, select a recording, and start transcription.
+Download the latest macOS DMG from the project's Releases page, open it, and drag Wordvale into Applications. The packaged build targets **Apple silicon** Macs. Open the app, sign in or create an account with email and password or Google, select a recording, and start transcription. Sign-in requires an internet connection. The local library is shared by accounts using the same Mac user profile; signing in does not isolate or sync its files.
 
 The first time you use a model, it needs an internet connection to download. Afterward, the model runs locally. Checking for app updates also uses the internet.
 
@@ -62,7 +62,7 @@ Think of Wordvale as a desktop app with a built-in transcription worker.
 5. Whisper turns the speech into text on your machine.
 6. The app shows progress while the job runs, then lets you copy or save the result.
 
-Nothing in the normal app flow needs a remote transcription API. The only network use is model download the first time you choose a model that is not already installed locally.
+Nothing in the normal app flow needs a remote transcription API. Signing in requires an internet connection; model downloads and update checks also use the network.
 
 ## What The App Actually Does Today
 
@@ -391,6 +391,10 @@ Open **Manage models** in the transcription view to compare the available models
 
 Large v3 Turbo is intended for transcription and is not trained for speech translation. Choose a model with translation support when using Translate to English.
 
+## Record meetings
+
+Open **Record** from the sidebar, choose Microphone, Computer audio, or both, and start recording. Each source can be muted independently, and recording can be paused and resumed. Stop to review and play back your recording. **Transcribe** starts this recording using your current settings; **Adjust transcription settings** in the recording actions menu adds it to the queue without starting. Saving to Library is optional, before or after transcription. Unsaved recordings appear in **Draft recordings** with their name and date. Choose **Open recording** to review completed audio; **Restore audio** is only shown for interrupted sessions that need their captured audio rebuilt. Draft row menus offer Rename, Show in Finder, and Delete draft. Deleting requires confirmation and is blocked for recordings in the queue or Library. Recording requires macOS 13 or later and the relevant macOS microphone or screen recording permissions.
+
 ## Library
 
 Open **Library** from the transcription sidebar to keep recordings and transcripts between sessions. Save one or more queue items to the library, add a recording, or import a TXT, SRT, or Wordvale JSON transcript. Library item names are separate from the names of original files. You can attach or remove a recording or transcript, relink missing recordings, and export saved transcripts.
@@ -410,9 +414,9 @@ git tag v0.1.0-alpha
 git push origin v0.1.0-alpha
 ```
 
-The release must include an asset named `Wordvale-macOS-arm64.dmg`. GitHub must report its `sha256:` digest and size in the release API; the app checks these before staging an update. The updater accepts stable, three-part version tags and ignores prereleases. Version numbers in the package, app bundle, Cargo manifest, and release tag must match.
+The release must include an asset named `Wordvale-macOS-arm64.dmg`. GitHub must report its `sha256:` digest and size in the release API; the app checks these before staging an update. The updater checks published stable releases and prereleases, orders semantic versions (including alpha, beta and release candidates), and ignores drafts. Version numbers in the package, Tauri configuration, Cargo manifest, and release tag must match.
 
-In **Settings → Updates**, check for a release, download it, then choose **Install and restart** after saving your transcripts and finishing active work. The updater supports the packaged Apple silicon app in a writable location, stages the verified app beside the existing bundle, and keeps the previous bundle in the staging folder for recovery. Development builds can check but cannot install updates. If replacement or relaunch fails, it attempts to restore the previous app.
+Wordvale checks for updates at startup and every six hours while open. A dismissible notice links to **Settings → Updates**; dismissal lasts for that release. In Settings, download an available update, then choose **Install and restart** after saving your transcripts and finishing active work. The updater supports the packaged Apple silicon app in a writable location, stages the verified app beside the existing bundle, and keeps the previous bundle in the staging folder for recovery. Development builds can check but cannot install updates. If replacement or relaunch fails, it attempts to restore the previous app.
 
 Install the first release containing the updater manually from its DMG; older versions cannot install updates themselves. The DMG and app are currently unsigned and unnotarized. The checksum verifies the artifact against GitHub’s release metadata; it is not an independent code-signing signature.
 

@@ -21,8 +21,11 @@ import {
     FileText,
     PanelLeftClose,
     PanelLeftOpen,
+    Coffee,
+    Mic,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/tauri";
+import { open } from "@tauri-apps/api/shell";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useWhisper } from "./hooks/useWhisper";
 import { DEFAULT_SETTINGS } from "./types/models";
@@ -43,10 +46,19 @@ import LibraryPage from "./components/LibraryPage";
 import SaveLibraryDialog from "./components/SaveLibraryDialog";
 
 import SettingsPage from "./components/SettingsPage";
+import RecorderPage from "./components/RecorderPage";
+import { version } from "../package.json";
 
 export default function App() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [focusUpdates, setFocusUpdates] = useState(false);
+    const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+    const [dismissedUpdate, setDismissedUpdate] = useState(() => localStorage.getItem("wordvale-dismissed-update"));
+    const [showRecorder, setShowRecorder] = useState(false);
+    const [queuedRecordingNotice, setQueuedRecordingNotice] = useState<string | null>(null);
+    const [pendingRecordingStart, setPendingRecordingStart] = useState<string | null>(null);
+    const [recordingActive, setRecordingActive] = useState(false);
     const [showModels, setShowModels] = useState(false);
     const [showLibrary, setShowLibrary] = useState(false);
     const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
@@ -92,6 +104,28 @@ export default function App() {
     } = useWhisper();
 
     useEffect(() => {
+        if (!isBackendReady || isUsingMockBackend || !("__TAURI__" in window)) return;
+        let cancelled = false;
+        const refresh = async () => {
+            try {
+                const response = await updateCommand("update_status");
+                const update = response.update as { status?: string; latest_version?: string | null } | undefined;
+                if (!cancelled && update) {
+                    if (["available", "unavailable", "downloading", "ready", "error"].includes(update.status || "") && update.latest_version) setUpdateNotice(update.latest_version);
+                    else if (update.status === "current") setUpdateNotice(null);
+                }
+            } catch { /* Keep the last known notice during temporary connection failures. */ }
+        };
+        const check = async () => {
+            try { await updateCommand("update_check", { current_version: version }); await refresh(); } catch { /* The next check can retry. */ }
+        };
+        void check();
+        const checkTimer = window.setInterval(check, 6 * 60 * 60 * 1000);
+        const statusTimer = window.setInterval(refresh, 30000);
+        return () => { cancelled = true; window.clearInterval(checkTimer); window.clearInterval(statusTimer); };
+    }, [isBackendReady, isUsingMockBackend, updateCommand]);
+
+    useEffect(() => {
         if (startupComplete || !isBackendReady || !modelStorage || isModelLoading) return;
         const timer = window.setTimeout(() => setStartupComplete(true), 400);
         return () => window.clearTimeout(timer);
@@ -117,6 +151,8 @@ export default function App() {
     const [isStarting, setIsStarting] = useState(false);
     const startInProgress = useRef(false);
     const [pendingRemoval, setPendingRemoval] = useState<{ id: string; fileName: string } | null>(null);
+    const recordingForClose = useRef(recordingActive);
+    recordingForClose.current = recordingActive;
     const queueForClose = useRef(queue);
     queueForClose.current = queue;
     const hasUnsaved = (items: typeof queue) => items.some((item) => item.result &&
@@ -140,14 +176,14 @@ export default function App() {
 
     useEffect(() => {
         const beforeUnload = (event: BeforeUnloadEvent) => {
-            if (hasUnsaved(queueForClose.current)) { event.preventDefault(); event.returnValue = ""; }
+            if (recordingForClose.current || hasUnsaved(queueForClose.current)) { event.preventDefault(); event.returnValue = ""; }
         };
         window.addEventListener("beforeunload", beforeUnload);
         let unlisten: (() => void) | undefined;
         let disposed = false;
         if ("__TAURI__" in window) {
             import("@tauri-apps/api/window").then(({ appWindow }) => appWindow.onCloseRequested((event) => {
-                if (hasUnsaved(queueForClose.current) && !window.confirm("You have unsaved transcripts. Close Wordvale and discard them?")) event.preventDefault();
+                if (recordingForClose.current || (hasUnsaved(queueForClose.current) && !window.confirm("You have unsaved transcripts. Close Wordvale and discard them?"))) event.preventDefault();
             })).then((cleanup) => { if (disposed) cleanup(); else unlisten = cleanup; });
         }
         return () => { disposed = true; unlisten?.(); window.removeEventListener("beforeunload", beforeUnload); };
@@ -325,6 +361,13 @@ export default function App() {
         librarySaveIds,
     ]);
 
+    useEffect(() => {
+        if (!pendingRecordingStart || !queue.some((item) => item.id === pendingRecordingStart)) return;
+        const id = pendingRecordingStart;
+        setPendingRecordingStart(null);
+        void handleStart(id).catch((failure) => { console.error("Recording transcription failed", failure); });
+    }, [pendingRecordingStart, queue, handleStart]);
+
     const handleRunFile = (id: string) => {
         const item = queueForClose.current.find((entry) => entry.id === id);
         if (!item || item.status === "processing") return;
@@ -376,7 +419,7 @@ export default function App() {
             <div className="startup-content">
                 <div className="startup-mark" aria-hidden="true"><AudioWaveform size={48} strokeWidth={1.6} /></div>
                 <h1>Wordvale</h1>
-                <p className="startup-tagline">Your words, kept yours.</p>
+
                 <div className="startup-status" role="status" aria-live="polite">
                     {!startupError && <span className="startup-indicator" aria-hidden="true" />}
                     <span>{startupError ? "Couldn’t finish starting" : isBackendReady ? (isModelLoading ? "Preparing your model…" : "Getting your workspace ready…") : "Starting your local transcription engine…"}</span>
@@ -387,7 +430,7 @@ export default function App() {
                     <button className="btn-ghost" onClick={() => setStartupComplete(true)}>Open Wordvale</button>
                 </div>}
             </div>
-            <p className="startup-footer">Private transcription, on your Mac</p>
+
         </main>;
     }
 
@@ -395,14 +438,15 @@ export default function App() {
         <div className="h-screen flex flex-col bg-surface-950">
             <div className="app-shell flex-1 flex min-h-0">
                 <aside className={`app-navigation${sidebarCollapsed ? " is-collapsed" : ""}`} aria-label="Main navigation">
-                    <div className="app-brand"><span className="app-brand-icon"><AudioWaveform size={20} /></span><div className="app-brand-copy"><h1>Wordvale</h1><p>Private transcription</p></div><button type="button" className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
+                    <div className="app-brand"><span className="app-brand-icon"><AudioWaveform size={20} /></span><div className="app-brand-copy"><h1>Wordvale</h1></div><button type="button" className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
                     <nav className="app-nav-links">
-                        <button aria-label="Transcribe" className={!showLibrary && !showModels && !showSettings ? "active" : ""} aria-current={!showLibrary && !showModels && !showSettings ? "page" : undefined} onClick={() => { setShowLibrary(false); setShowModels(false); setShowSettings(false); }}><FileText size={17} /><span>Transcribe</span></button>
-                        <button aria-label="Library" className={showLibrary ? "active" : ""} aria-current={showLibrary ? "page" : undefined} onClick={() => { setShowLibrary(true); setShowModels(false); setShowSettings(false); }}><LibraryBig size={17} /><span>Library</span></button>
-                        <button aria-label="Models" className={showModels ? "active" : ""} aria-current={showModels ? "page" : undefined} onClick={() => { setShowModels(true); setShowLibrary(false); setShowSettings(false); }}><HardDrive size={17} /><span>Models</span></button>
-                        <button aria-label="Settings" className={showSettings ? "active" : ""} aria-current={showSettings ? "page" : undefined} onClick={() => { setShowSettings(true); setShowLibrary(false); setShowModels(false); }}><Settings size={17} /><span>Settings</span></button>
+                        <button aria-label="Transcribe" className={!showLibrary && !showModels && !showSettings && !showRecorder ? "active" : ""} aria-current={!showLibrary && !showModels && !showSettings && !showRecorder ? "page" : undefined} onClick={() => { setShowLibrary(false); setShowModels(false); setShowSettings(false); setShowRecorder(false); }}><FileText size={17} /><span>Transcribe</span></button>
+                        <button aria-label="Record" className={showRecorder ? "active" : ""} aria-current={showRecorder ? "page" : undefined} onClick={() => { setShowRecorder(true); setShowLibrary(false); setShowModels(false); setShowSettings(false); }}><Mic size={17} /><span>Record</span>{recordingActive && <span aria-label="Recording" className="recorder-nav-dot" />}</button>
+                        <button aria-label="Library" className={showLibrary ? "active" : ""} aria-current={showLibrary ? "page" : undefined} onClick={() => { setShowLibrary(true); setShowModels(false); setShowSettings(false); setShowRecorder(false); }}><LibraryBig size={17} /><span>Library</span></button>
+                        <button aria-label="Models" className={showModels ? "active" : ""} aria-current={showModels ? "page" : undefined} onClick={() => { setShowModels(true); setShowLibrary(false); setShowSettings(false); setShowRecorder(false); }}><HardDrive size={17} /><span>Models</span></button>
+                        <button aria-label="Settings" className={showSettings ? "active" : ""} aria-current={showSettings ? "page" : undefined} onClick={() => { setFocusUpdates(false); setShowSettings(true); setShowLibrary(false); setShowModels(false); setShowRecorder(false); }}><Settings size={17} /><span>Settings</span></button>
                     </nav>
-                    {!sidebarCollapsed && !showLibrary && !showModels && !showSettings && <section className="sidebar-settings" aria-labelledby="transcription-settings-title">
+                    {!sidebarCollapsed && !showLibrary && !showModels && !showSettings && !showRecorder && <section className="sidebar-settings" aria-labelledby="transcription-settings-title">
                         <div className="sidebar-settings-heading"><h2 id="transcription-settings-title">Transcription settings</h2><p>{selectedModelInfo?.display_name || "Base model"} · {selectedLanguage === "auto" ? "Automatic language" : selectedLanguage}</p></div>
                         <ModelSelector models={models} downloadedModels={modelStorage?.downloaded_models.map((model) => model.name) ?? []} currentModel={currentModel} isLoading={isModelLoading || isTranscribing || !modelStorage} selectedLanguage={selectedLanguage} selectedTask={selectedTask} onModelSelect={handleModelSelect} onLanguageChange={setSelectedLanguage} onTaskChange={setSelectedTask} />
                         <AdvancedSettingsPanel settings={settings} onSettingsChange={setSettings} />
@@ -419,18 +463,66 @@ export default function App() {
                         )}
                     </div>
                 </aside>
-                {showLibrary ? (
+                <div className="recorder-host" style={{display:showRecorder ? "flex" : "none"}}><RecorderPage
+                    visible={showRecorder}
+                    draftInUse={folder => queue.some(entry => entry.filePath.startsWith(`${folder}/`)) || libraryItems.some(entry => entry.audio_path?.startsWith(`${folder}/`))}
+                    onDeleteDraft={async folder => {
+                        if (queueForClose.current.some(entry => entry.filePath.startsWith(`${folder}/`))) throw new Error("This recording is in your queue. Remove it from the queue before deleting its draft.");
+                        const response = await updateCommand("library_list");
+                        const entries = response.items as LibraryItem[];
+                        if (entries.some(entry => entry.audio_path?.startsWith(`${folder}/`))) throw new Error("This recording is used by Library and cannot be deleted as a draft.");
+                        if (queueForClose.current.some(entry => entry.filePath.startsWith(`${folder}/`))) throw new Error("This recording was added to the queue. Remove it from the queue before deleting its draft.");
+                        await invoke("recording_delete_draft", { folder });
+                    }}
+                    transcriptionSummary={`${selectedModelInfo?.display_name || "Base model"} · ${selectedLanguage === "auto" ? "Automatic language" : selectedLanguage}`}
+                    transcribeUnavailable={!isBackendReady ? "Connecting to the transcription engine…" : isTranscribing ? "A transcription is running. You can add this recording to the queue." : isModelLoading || isStarting ? "Preparing the model…" : !modelStorage ? "Loading available models…" : currentModel?.endsWith(".en") && selectedLanguage !== "en" ? "Choose English in transcription settings for this model." : selectedTask === "translate" && selectedModelInfo?.translation_support === false ? "Choose a model that supports translation in settings." : librarySaveIds !== null ? "Finish saving your transcript first." : null}
+                    onRecordingChange={setRecordingActive}
+                    onLibrary={() => { setShowRecorder(false); setShowLibrary(true); }}
+                    onSave={async (draft) => {
+                        const queued = queue.find((entry) => entry.filePath === draft.path);
+                        if (queued?.libraryId) {
+                            const existing = libraryItems.find((entry) => entry.id === queued.libraryId);
+                            if (existing) return existing;
+                        }
+                        const response = await updateCommand("library_create", { name: draft.name, audio_path: draft.path, audio_mode: "link", transcript: queued?.result });
+                        const saved = response.item as LibraryItem;
+                        await refreshLibrary();
+                        if (queued) {
+                            const latest = queueForClose.current.find((entry) => entry.id === queued.id);
+                            linkQueueToLibrary(queued.id, saved.id, queued.result);
+                            if (latest?.result && latest.result !== queued.result) {
+                                await updateCommand("library_set_transcript", { id: saved.id, transcript: latest.result });
+                                linkQueueToLibrary(queued.id, saved.id, latest.result);
+                            }
+                        }
+                        return saved;
+                    }}
+                    onTranscribe={async (draft, startImmediately) => {
+                        const existing = queue.find((entry) => entry.filePath === draft.path);
+                        let id = existing?.id;
+                        if (!id) {
+                            const metadata = await invoke<{size:number}>("get_file_metadata", {path:draft.path});
+                            [id] = addToQueue([{path:draft.path,size:metadata.size,libraryId:draft.libraryId,fileName:draft.name}]);
+                        }
+                        setSelectedQueueId(id);
+                        setQueuedRecordingNotice(startImmediately || existing?.status === "completed" ? null : draft.name);
+                        setShowRecorder(false); setShowLibrary(false); setShowModels(false); setShowSettings(false);
+                        if (startImmediately && (!existing || existing.status === "pending" || existing.status === "failed")) setPendingRecordingStart(id);
+                    }}
+                /></div>
+                {showRecorder ? null : showLibrary ? (
                     <LibraryPage items={libraryItems} loading={libraryLoading} error={libraryError} onBack={() => setShowLibrary(false)} command={updateCommand} onRefresh={refreshLibrary} onQueue={async (item) => { if (!item.audio_path || !item.audio_available) throw new Error("Relink the recording before adding it to the queue."); const metadata = await invoke<{ size: number }>("get_file_metadata", { path: item.audio_path }); addToQueue([{ path: item.audio_path, size: metadata.size, libraryId: item.id, fileName: item.audio_name || item.name }]); }} />
                 ) : showModels ? (
                     <ModelsPage models={models} storage={modelStorage} currentModel={currentModel} isTranscribing={isTranscribing} isModelLoading={isModelLoading} download={modelDownload} downloadError={modelDownloadError} onBack={() => setShowModels(false)} onRefresh={getModelStorage} onDownload={downloadModel} onCancelDownload={cancelModelDownload} onUse={loadModel} onRemove={deleteModel} onRemoveAll={deleteAllModels} />
                 ) : showSettings ? (
-                    <SettingsPage onBack={() => setShowSettings(false)} logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} updateCommand={updateCommand} updateBlocked={isTranscribing || isModelLoading || hasUnsaved(queue)} />
+                    <SettingsPage onBack={() => setShowSettings(false)} focusUpdates={focusUpdates} logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} updateCommand={updateCommand} updateBlocked={recordingActive || isTranscribing || isModelLoading || hasUnsaved(queue)} />
                 ) : (<>
                 <div className="transcription-layout flex-1 min-w-0 min-h-0">
                 <main className="workspace flex-1 min-w-0 min-h-0 overflow-y-auto">
-                    <header className="workspace-header"><div><h2>Transcribe</h2><p>Turn your recordings into text, privately.</p></div></header>
+                    <header className="workspace-header"><div><h2>Transcribe</h2></div></header>
                     <div className="workspace-content">
-                        {!queue.length && <div className="workspace-intro"><h3>Start with a recording</h3><p>Choose an audio or video file to create a transcript.</p></div>}
+                        {queuedRecordingNotice && <div className="recording-queued-notice" role="status"><div><strong>{queuedRecordingNotice} is in your queue</strong><span>Ready when you are. Adjust the settings or start transcription.</span></div><button aria-label="Dismiss recording message" onClick={() => setQueuedRecordingNotice(null)}><X size={16}/></button></div>}
+                        {!queue.length && <div className="workspace-intro"><h3>Start with a recording</h3></div>}
                         <FileDropZone onFilesSelected={addToQueue} isTranscribing={isTranscribing} queueCount={queue.length} pendingCount={pendingCount} completedCount={completedCount} failedCount={failedCount} queuedEstimate={queue.length > 0 ? formatDuration(queuedEstimateSeconds) : null} />
                     <QueuePanel
                         queue={queue}
@@ -467,12 +559,13 @@ export default function App() {
                 <aside className="transcription-sidebar" aria-label="Transcription details and export">
                     <ModelInfoPanel model={selectedModelInfo} systemInfo={systemInfo} progress={progress} isTranscribing={isTranscribing} elapsedTime={elapsedTime} />
                     <ExportPanel result={displayedResult} selectedTranscriptView={selectedTranscriptView} showTranscriptViewSelector={displayedResultHasTranslation} onSaved={(view) => { if (selectedQueueItem?.result === displayedResult) markSaved(selectedQueueItem.id, view); }} />
+                    <div className="transcription-support"><p className="transcription-support-prompt">Enjoying Wordvale?</p><button type="button" className="support-button sidebar-transcription-button" onClick={() => void open("https://buymeacoffee.com/Arin11a")}><Coffee size={16} aria-hidden="true" /> Buy me a coffee</button></div>
                 </aside>
                 </div>
                 </>)}
             </div>
 
-            <SaveLibraryDialog open={librarySaveIds !== null} onClose={() => setLibrarySaveIds(null)} items={queue.filter((item) => librarySaveIds?.includes(item.id))} command={updateCommand} onSaved={(queueItem, item, includedTranscript) => { linkQueueToLibrary(queueItem.id, item.id, includedTranscript ? queueItem.result : undefined); void refreshLibrary(); }} />
+            <SaveLibraryDialog open={librarySaveIds !== null} onClose={() => setLibrarySaveIds(null)} items={queue.filter((item) => librarySaveIds?.includes(item.id))} command={updateCommand} onSaved={(queueItem, item, includedTranscript) => { linkQueueToLibrary(queueItem.id, item.id, includedTranscript ? queueItem.result : undefined); void invoke("recording_ack", { path: queueItem.filePath }).catch(() => {}); void refreshLibrary(); }} />
             <BatchExportDialog open={showBatchExport} onClose={() => setShowBatchExport(false)} items={queue} onSaved={(id, view, result) => { if (queueForClose.current.find((item) => item.id === id)?.result === result) markSaved(id, view); }} />
 
             <Dialog.Root open={!!listeningItem} onOpenChange={(open) => { if (!open) setListeningId(null); }}>
@@ -539,6 +632,11 @@ export default function App() {
             </Dialog.Root>
 
             {/* ─── Error toast ─── */}
+            {updateNotice && updateNotice !== dismissedUpdate && !showSettings && <aside className="update-notice" aria-label="Update available" role="status">
+                <button className="update-notice-close" aria-label="Dismiss update notification" onClick={() => { localStorage.setItem("wordvale-dismissed-update", updateNotice); setDismissedUpdate(updateNotice); }}><X size={16} /></button>
+                <strong>Update available</strong><p>Wordvale {updateNotice} is ready to explore.</p>
+                <button className="btn-primary" onClick={() => { setFocusUpdates(true); setShowSettings(true); setShowLibrary(false); setShowModels(false); setShowRecorder(false); }}>View update</button>
+            </aside>}
             {error && (
                 <div role="alert" className="fixed bottom-6 right-6 z-50 animate-slide-up">
                     <div className="flex items-start gap-3 rounded-xl border border-danger-500/30 bg-surface-900/95 backdrop-blur-md p-4 shadow-xl max-w-sm">
