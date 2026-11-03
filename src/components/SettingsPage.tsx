@@ -6,6 +6,7 @@ import { exit } from "@tauri-apps/api/process";
 import { version } from "../../package.json";
 import type { BackendDebugEntry } from "../types/models";
 import BackendDebugPanel from "./BackendDebugPanel";
+import { applyTheme, getTheme, themes, type ThemeId } from "../themes";
 
 interface UpdateStatus {
     status: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "installing" | "unavailable" | "error";
@@ -28,6 +29,7 @@ interface Props {
 export default function SettingsPage({ onBack, updateCommand, updateBlocked, ...props }: Props) {
     const [update, setUpdate] = useState<UpdateStatus>({ status: "idle", current_version: version, latest_version: null, message: "", progress: 0, can_install: false });
     const [busy, setBusy] = useState(false);
+    const [theme, setTheme] = useState<ThemeId>(getTheme);
     const [connectionError, setConnectionError] = useState("");
     const isDesktop = "__TAURI__" in window && !props.isUsingMockBackend;
 
@@ -75,8 +77,18 @@ export default function SettingsPage({ onBack, updateCommand, updateBlocked, ...
             <button onClick={onBack} className="page-back"><ArrowLeft className="h-4 w-4" /> Back to transcription</button>
         <div className="w-full">
             <h2 className="text-3xl font-bold text-surface-100">Settings</h2>
-            <p className="mt-2 text-sm leading-relaxed text-surface-400">Manage updates and troubleshoot the backend.</p>
-            <section className="card p-5 mt-6">
+            <p className="mt-2 text-sm leading-relaxed text-surface-400">Choose how Wordvale looks, manage updates, and troubleshoot the backend.</p>
+            <section className="appearance-section settings-section" aria-labelledby="appearance-title">
+                <div className="appearance-heading"><div><h3 id="appearance-title">Appearance</h3><p>Choose a theme for your workspace.</p></div><span>Saved on this Mac</span></div>
+                <div className="theme-grid" role="radiogroup" aria-label="Appearance theme">
+                    {themes.map((item) => <label key={item.id} className={`theme-option${theme === item.id ? " is-selected" : ""}`}>
+                        <input className="sr-only" type="radio" name="appearance-theme" value={item.id} checked={theme === item.id} onChange={() => { setTheme(item.id); applyTheme(item.id); }} />
+                        <span className="theme-preview" style={{ background: item.colors[0], borderColor: item.colors[1] }}><span style={{ background: item.colors[1] }} /><span style={{ background: item.colors[2] }} /></span>
+                        <span className="theme-option-copy"><strong>{item.name}</strong><span>{item.description}</span></span><span className="theme-radio" aria-hidden="true" />
+                    </label>)}
+                </div>
+            </section>
+            <section className="card p-5 settings-section">
                 <h3 className="text-base font-semibold text-surface-100">Updates</h3>
                 <p className="text-xs text-surface-400 mt-2">Current version: {version}{update.latest_version && update.latest_version !== version ? ` · Latest: ${update.latest_version}` : ""}</p>
                 <p className="text-xs text-surface-400 mt-1">Updates are verified before installation. The app will restart to finish.</p>
@@ -94,7 +106,7 @@ export default function SettingsPage({ onBack, updateCommand, updateBlocked, ...
                 {update.status === "downloading" && <div className="mt-4"><div className="h-1.5 rounded-full bg-surface-800 overflow-hidden"><div className="h-full bg-accent-400 transition-all" style={{ width: `${Math.max(0, Math.min(100, update.progress))}%` }} /></div><p className="text-xs text-surface-400 mt-1">{update.progress}%</p></div>}
                 <p role="status" className="text-xs text-surface-300 mt-3">{connectionError || update.message}</p>
             </section>
-            <BackendDebugPanel {...props} />
+            <div className="settings-section"><BackendDebugPanel {...props} /></div>
         </div>
         </div>
     </main>;

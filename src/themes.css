@@ -1,0 +1,239 @@
+/* Curated theme palettes; surface and accent roles are shared across the app. */
+
+:root:not([data-theme]) {
+  --surface-50: 25 46 43;
+  --surface-100: 37 61 59;
+  --surface-200: 52 74 70;
+  --surface-300: 70 90 85;
+  --surface-400: 88 109 101;
+  --surface-500: 98 116 109;
+  --surface-600: 135 155 145;
+  --surface-700: 181 194 184;
+  --surface-800: 220 228 220;
+  --surface-850: 244 245 239;
+  --surface-900: 255 255 255;
+  --surface-950: 250 248 243;
+  --accent-50: 243 247 242;
+  --accent-100: 228 238 230;
+  --accent-200: 208 225 211;
+  --accent-300: 54 94 81;
+  --accent-400: 66 107 91;
+  --accent-500: 66 108 89;
+  --accent-600: 49 86 70;
+  --accent-700: 41 72 61;
+  --accent-800: 33 61 51;
+  --accent-900: 26 51 42;
+  --theme-sidebar: 229 232 223;
+  --theme-selected: 242 247 241;
+  --theme-selection: 201 223 203;
+  --on-accent: #ffffff;
+  --status-success: 40 116 80;
+  --status-warning: 138 90 6;
+  --status-danger: 177 63 62;
+  color-scheme: light;
+}
+
+:root[data-theme="reading"] {
+  --surface-50: 25 46 43;
+  --surface-100: 37 61 59;
+  --surface-200: 52 74 70;
+  --surface-300: 70 90 85;
+  --surface-400: 88 109 101;
+  --surface-500: 98 116 109;
+  --surface-600: 135 155 145;
+  --surface-700: 181 194 184;
+  --surface-800: 220 228 220;
+  --surface-850: 244 245 239;
+  --surface-900: 255 255 255;
+  --surface-950: 250 248 243;
+  --accent-50: 243 247 242;
+  --accent-100: 228 238 230;
+  --accent-200: 208 225 211;
+  --accent-300: 54 94 81;
+  --accent-400: 66 107 91;
+  --accent-500: 66 108 89;
+  --accent-600: 49 86 70;
+  --accent-700: 41 72 61;
+  --accent-800: 33 61 51;
+  --accent-900: 26 51 42;
+  --theme-sidebar: 229 232 223;
+  --theme-selected: 242 247 241;
+  --theme-selection: 201 223 203;
+  --on-accent: #ffffff;
+  --status-success: 40 116 80;
+  --status-warning: 138 90 6;
+  --status-danger: 177 63 62;
+  color-scheme: light;
+}
+
+:root[data-theme="paper"] {
+  --surface-50: 39 41 45;
+  --surface-100: 48 52 58;
+  --surface-200: 64 70 80;
+  --surface-300: 83 91 101;
+  --surface-400: 98 109 121;
+  --surface-500: 107 117 128;
+  --surface-600: 144 154 165;
+  --surface-700: 193 201 207;
+  --surface-800: 225 229 231;
+  --surface-850: 243 244 243;
+  --surface-900: 255 255 255;
+  --surface-950: 250 249 246;
+  --accent-50: 240 245 250;
+  --accent-100: 225 234 243;
+  --accent-200: 207 222 236;
+  --accent-300: 52 83 110;
+  --accent-400: 65 106 137;
+  --accent-500: 66 105 135;
+  --accent-600: 49 81 107;
+  --accent-700: 41 68 93;
+  --accent-800: 34 58 80;
+  --accent-900: 28 49 69;
+  --theme-sidebar: 233 236 236;
+  --theme-selected: 241 246 248;
+  --theme-selection: 211 226 237;
+  --on-accent: #ffffff;
+  --status-success: 40 116 80;
+  --status-warning: 138 90 6;
+  --status-danger: 177 63 62;
+  color-scheme: light;
+}
+
+:root[data-theme="graphite"] {
+  --surface-50: 255 255 255;
+  --surface-100: 240 241 242;
+  --surface-200: 217 221 223;
+  --surface-300: 197 202 204;
+  --surface-400: 175 184 187;
+  --surface-500: 170 180 183;
+  --surface-600: 129 144 146;
+  --surface-700: 91 107 107;
+  --surface-800: 53 68 67;
+  --surface-850: 39 52 50;
+  --surface-900: 32 43 41;
+  --surface-950: 23 33 31;
+  --accent-50: 24 44 37;
+  --accent-100: 32 62 48;
+  --accent-200: 44 83 64;
+  --accent-300: 194 228 204;
+  --accent-400: 168 215 183;
+  --accent-500: 65 110 86;
+  --accent-600: 52 91 70;
+  --accent-700: 45 77 62;
+  --accent-800: 36 63 51;
+  --accent-900: 28 51 42;
+  --theme-sidebar: 29 41 38;
+  --theme-selected: 39 61 49;
+  --theme-selection: 62 102 83;
+  --on-accent: #ffffff;
+  --status-success: 161 220 181;
+  --status-warning: 246 205 128;
+  --status-danger: 255 166 161;
+  color-scheme: dark;
+}
+
+:root[data-theme="midnight"] {
+  --surface-50: 255 255 255;
+  --surface-100: 237 242 248;
+  --surface-200: 216 226 238;
+  --surface-300: 194 208 224;
+  --surface-400: 174 190 208;
+  --surface-500: 168 185 203;
+  --surface-600: 126 145 167;
+  --surface-700: 88 109 131;
+  --surface-800: 52 71 92;
+  --surface-850: 40 57 75;
+  --surface-900: 32 47 64;
+  --surface-950: 23 36 51;
+  --accent-50: 25 43 64;
+  --accent-100: 32 56 82;
+  --accent-200: 44 77 106;
+  --accent-300: 197 223 242;
+  --accent-400: 168 208 237;
+  --accent-500: 59 104 135;
+  --accent-600: 48 86 113;
+  --accent-700: 40 72 95;
+  --accent-800: 32 59 79;
+  --accent-900: 25 47 64;
+  --theme-sidebar: 28 42 58;
+  --theme-selected: 38 60 80;
+  --theme-selection: 60 94 122;
+  --on-accent: #ffffff;
+  --status-success: 161 220 181;
+  --status-warning: 246 205 128;
+  --status-danger: 255 166 161;
+  color-scheme: dark;
+}
+
+:root[data-theme="dusk"] {
+  --surface-50: 255 255 255;
+  --surface-100: 243 239 244;
+  --surface-200: 228 219 230;
+  --surface-300: 211 198 214;
+  --surface-400: 194 178 199;
+  --surface-500: 188 173 193;
+  --surface-600: 151 137 156;
+  --surface-700: 110 97 115;
+  --surface-800: 73 61 76;
+  --surface-850: 57 47 61;
+  --surface-900: 48 38 52;
+  --surface-950: 37 30 41;
+  --accent-50: 49 37 58;
+  --accent-100: 73 52 83;
+  --accent-200: 100 71 109;
+  --accent-300: 227 201 234;
+  --accent-400: 212 180 223;
+  --accent-500: 119 84 127;
+  --accent-600: 99 69 106;
+  --accent-700: 83 58 90;
+  --accent-800: 68 47 74;
+  --accent-900: 55 37 60;
+  --theme-sidebar: 44 35 48;
+  --theme-selected: 70 51 75;
+  --theme-selection: 105 78 112;
+  --on-accent: #ffffff;
+  --status-success: 161 220 181;
+  --status-warning: 246 205 128;
+  --status-danger: 255 166 161;
+  color-scheme: dark;
+}
+
+/* Standard system palettes and the warm charcoal accent shown in the reference. */
+:root[data-theme="light"] {
+  --surface-50: 38 38 38; --surface-100: 48 48 48; --surface-200: 64 64 64;
+  --surface-300: 82 82 82; --surface-400: 100 100 100; --surface-500: 110 110 110;
+  --surface-600: 140 140 140; --surface-700: 184 184 184; --surface-800: 220 220 220;
+  --surface-850: 238 238 238; --surface-900: 250 250 250; --surface-950: 245 245 245;
+  --accent-50: 246 242 249; --accent-100: 235 226 241; --accent-200: 218 202 229;
+  --accent-300: 151 124 171; --accent-400: 126 97 150; --accent-500: 112 86 129;
+  --accent-600: 92 68 109; --accent-700: 75 54 91; --accent-800: 58 42 72; --accent-900: 42 30 53;
+  --theme-sidebar: 232 232 232; --theme-selected: 242 242 242; --theme-selection: 205 205 205;
+  --on-accent: #ffffff; --status-success: 40 116 80; --status-warning: 138 90 6; --status-danger: 177 63 62;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --surface-50: 255 255 255; --surface-100: 240 240 240; --surface-200: 220 220 220;
+  --surface-300: 198 198 198; --surface-400: 176 176 176; --surface-500: 168 168 168;
+  --surface-600: 136 136 136; --surface-700: 98 98 98; --surface-800: 60 60 60;
+  --surface-850: 44 44 44; --surface-900: 34 34 34; --surface-950: 25 25 25;
+  --accent-50: 241 235 246; --accent-100: 220 208 231; --accent-200: 194 174 211;
+  --accent-300: 142 116 164; --accent-400: 111 84 137; --accent-500: 91 69 111;
+  --accent-600: 77 57 95; --accent-700: 64 47 79; --accent-800: 50 38 62; --accent-900: 37 28 47;
+  --theme-sidebar: 32 32 32; --theme-selected: 50 50 50; --theme-selection: 80 80 80;
+  --on-accent: #ffffff; --status-success: 161 220 181; --status-warning: 246 205 128; --status-danger: 255 166 161;
+  color-scheme: dark;
+}
+
+:root[data-theme="amber"] {
+  --surface-50: 255 255 255; --surface-100: 244 244 244; --surface-200: 225 225 225;
+  --surface-300: 202 202 202; --surface-400: 177 177 177; --surface-500: 169 169 169;
+  --surface-600: 135 135 135; --surface-700: 91 91 91; --surface-800: 55 55 55;
+  --surface-850: 42 42 42; --surface-900: 34 34 34; --surface-950: 24 24 24;
+  --accent-50: 255 246 214; --accent-100: 255 235 166; --accent-200: 255 221 112;
+  --accent-300: 255 211 76; --accent-400: 255 204 61; --accent-500: 240 183 36;
+  --accent-600: 206 151 21; --accent-700: 167 119 14; --accent-800: 126 88 12; --accent-900: 88 61 11;
+  --theme-sidebar: 30 30 30; --theme-selected: 48 43 29; --theme-selection: 103 80 27;
+  --on-accent: #201a0a; --status-success: 161 220 181; --status-warning: 255 215 120; --status-danger: 255 166 161;
+  color-scheme: dark;
+}

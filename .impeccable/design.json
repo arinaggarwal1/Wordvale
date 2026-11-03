@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-03T06:30:40.387718+00:00",
+  "title": "Design System: Wordvale",
+  "extensions": {
+    "colorMeta": {
+      "workspace": {
+        "role": "neutral",
+        "displayName": "Warm paper",
+        "canonical": "#faf8f3",
+        "tonalRamp": [
+          "oklch(15% 0.015 95)",
+          "oklch(25% 0.025 95)",
+          "oklch(35% 0.035 95)",
+          "oklch(45% 0.045 95)",
+          "oklch(58% 0.045 95)",
+          "oklch(72% 0.035 95)",
+          "oklch(85% 0.02 95)",
+          "oklch(95% 0.008 95)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Soft sage",
+        "canonical": "#e5e8df",
+        "tonalRamp": [
+          "oklch(15% 0.015 145)",
+          "oklch(25% 0.025 145)",
+          "oklch(35% 0.035 145)",
+          "oklch(45% 0.045 145)",
+          "oklch(58% 0.045 145)",
+          "oklch(72% 0.035 145)",
+          "oklch(85% 0.02 145)",
+          "oklch(95% 0.008 145)"
+        ]
+      },
+      "sidebar-border": {
+        "role": "neutral",
+        "displayName": "Sage border",
+        "canonical": "#d3dbd1",
+        "tonalRamp": [
+          "oklch(15% 0.015 145)",
+          "oklch(25% 0.025 145)",
+          "oklch(35% 0.035 145)",
+          "oklch(45% 0.045 145)",
+          "oklch(58% 0.045 145)",
+          "oklch(72% 0.035 145)",
+          "oklch(85% 0.02 145)",
+          "oklch(95% 0.008 145)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White surface",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.015 100)",
+          "oklch(25% 0.025 100)",
+          "oklch(35% 0.035 100)",
+          "oklch(45% 0.045 100)",
+          "oklch(58% 0.045 100)",
+          "oklch(72% 0.035 100)",
+          "oklch(85% 0.02 100)",
+          "oklch(95% 0.008 100)"
+        ]
+      },
+      "surface-soft": {
+        "role": "neutral",
+        "displayName": "Soft surface",
+        "canonical": "#edf1e9",
+        "tonalRamp": [
+          "oklch(15% 0.015 145)",
+          "oklch(25% 0.025 145)",
+          "oklch(35% 0.035 145)",
+          "oklch(45% 0.045 145)",
+          "oklch(58% 0.045 145)",
+          "oklch(72% 0.035 145)",
+          "oklch(85% 0.02 145)",
+          "oklch(95% 0.008 145)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Green ink",
+        "canonical": "#253d3b",
+        "tonalRamp": [
+          "oklch(15% 0.015 175)",
+          "oklch(25% 0.025 175)",
+          "oklch(35% 0.035 175)",
+          "oklch(45% 0.045 175)",
+          "oklch(58% 0.045 175)",
+          "oklch(72% 0.035 175)",
+          "oklch(85% 0.02 175)",
+          "oklch(95% 0.008 175)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted green text",
+        "canonical": "#62746d",
+        "tonalRamp": [
+          "oklch(15% 0.015 155)",
+          "oklch(25% 0.025 155)",
+          "oklch(35% 0.035 155)",
+          "oklch(45% 0.045 155)",
+          "oklch(58% 0.045 155)",
+          "oklch(72% 0.035 155)",
+          "oklch(85% 0.02 155)",
+          "oklch(95% 0.008 155)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Reading green",
+        "canonical": "#426c59",
+        "tonalRamp": [
+          "oklch(15% 0.015 155)",
+          "oklch(25% 0.025 155)",
+          "oklch(35% 0.035 155)",
+          "oklch(45% 0.045 155)",
+          "oklch(58% 0.045 155)",
+          "oklch(72% 0.035 155)",
+          "oklch(85% 0.02 155)",
+          "oklch(95% 0.008 155)"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Deep reading green",
+        "canonical": "#315646",
+        "tonalRamp": [
+          "oklch(15% 0.015 155)",
+          "oklch(25% 0.025 155)",
+          "oklch(35% 0.035 155)",
+          "oklch(45% 0.045 155)",
+          "oklch(58% 0.045 155)",
+          "oklch(72% 0.035 155)",
+          "oklch(85% 0.02 155)",
+          "oklch(95% 0.008 155)"
+        ]
+      },
+      "navigation-hover": {
+        "role": "neutral",
+        "displayName": "Navigation hover",
+        "canonical": "#d8e1d6",
+        "tonalRamp": [
+          "oklch(15% 0.015 145)",
+          "oklch(25% 0.025 145)",
+          "oklch(35% 0.035 145)",
+          "oklch(45% 0.045 145)",
+          "oklch(58% 0.045 145)",
+          "oklch(72% 0.035 145)",
+          "oklch(85% 0.02 145)",
+          "oklch(95% 0.008 145)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Pale divider",
+        "canonical": "#dce4dc",
+        "tonalRamp": [
+          "oklch(15% 0.015 145)",
+          "oklch(25% 0.025 145)",
+          "oklch(35% 0.035 145)",
+          "oklch(45% 0.045 145)",
+          "oklch(58% 0.045 145)",
+          "oklch(72% 0.035 145)",
+          "oklch(85% 0.02 145)",
+          "oklch(95% 0.008 145)"
+        ]
+      },
+      "success": {
+        "role": "status",
+        "displayName": "Success green",
+        "canonical": "#287450",
+        "tonalRamp": [
+          "oklch(15% 0.015 155)",
+          "oklch(25% 0.025 155)",
+          "oklch(35% 0.035 155)",
+          "oklch(45% 0.045 155)",
+          "oklch(58% 0.045 155)",
+          "oklch(72% 0.035 155)",
+          "oklch(85% 0.02 155)",
+          "oklch(95% 0.008 155)"
+        ]
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Warning ochre",
+        "canonical": "#8a5a06",
+        "tonalRamp": [
+          "oklch(15% 0.015 75)",
+          "oklch(25% 0.025 75)",
+          "oklch(35% 0.035 75)",
+          "oklch(45% 0.045 75)",
+          "oklch(58% 0.045 75)",
+          "oklch(72% 0.035 75)",
+          "oklch(85% 0.02 75)",
+          "oklch(95% 0.008 75)"
+        ]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "Danger red",
+        "canonical": "#b13f3e",
+        "tonalRamp": [
+          "oklch(15% 0.015 25)",
+          "oklch(25% 0.025 25)",
+          "oklch(35% 0.035 25)",
+          "oklch(45% 0.045 25)",
+          "oklch(58% 0.045 25)",
+          "oklch(72% 0.035 25)",
+          "oklch(85% 0.02 25)",
+          "oklch(95% 0.008 25)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Workspace heading",
+        "purpose": "Name the current workspace."
+      },
+      "title": {
+        "displayName": "Introductory title",
+        "purpose": "Introduce the current task."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Controls and content."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Compact supporting cues."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 3px rgba(37, 61, 59, 0.05)",
+        "purpose": "Subtle card separation."
+      },
+      {
+        "name": "elevated",
+        "value": "0 8px 24px rgba(37, 61, 59, 0.12)",
+        "purpose": "Elevated cards."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "200ms",
+        "purpose": "Control state changes."
+      },
+      {
+        "name": "disclosure-chevron",
+        "value": "150ms ease",
+        "purpose": "Indicate disclosure state."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "900px"
+      },
+      {
+        "name": "icon-rail",
+        "value": "650px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main transcription action.",
+      "html": "<button class=\"ds-primary\">Start transcription</button>",
+      "css": ".ds-primary{background:var(--accent-primary);color:white;border:0;border-radius:8px;padding:10px 16px;font:500 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;cursor:pointer;transition:all 200ms}.ds-primary:hover{background:var(--accent-hover)}.ds-primary:active{transform:scale(.98)}.ds-primary:focus-visible{outline:2px solid var(--accent-hover);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "description": "Secondary or stop action.",
+      "html": "<button class=\"ds-secondary\">Stop transcription</button>",
+      "css": ".ds-secondary{background:rgba(220,228,220,.6);color:#344a46;border:1px solid #b5c2b8;border-radius:8px;padding:10px 16px;font:500 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;cursor:pointer;transition:all 200ms}.ds-secondary:hover{background:rgba(181,194,184,.8)}.ds-secondary:focus-visible{outline:2px solid var(--accent-hover);outline-offset:2px}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "description": "Compact field for settings.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search\" aria-label=\"Search\">",
+      "css": ".ds-input{background:rgba(220,228,220,.6);border:1px solid rgba(181,194,184,.5);border-radius:8px;padding:8px 12px;color:#253d3b;font:14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;transition:all 200ms}.ds-input:hover{border-color:#879b91}.ds-input:focus-visible{outline:1px solid rgba(66,108,89,.4);border-color:rgba(66,108,89,.5)}"
+    },
+    {
+      "name": "Navigation item",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Selected destination in the sidebar.",
+      "html": "<button class=\"ds-nav\" aria-current=\"page\">Transcribe</button>",
+      "css": ".ds-nav{background:#426c59;color:#fff;border:0;border-radius:8px;padding:10px 12px;text-align:left;font:500 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;cursor:pointer}.ds-nav:hover{background:#315646}.ds-nav:focus-visible{outline:2px solid #315646;outline-offset:2px}"
+    },
+    {
+      "name": "Privacy badge",
+      "kind": "chip",
+      "refersTo": "privacy-badge",
+      "description": "A quiet local-processing cue.",
+      "html": "<span class=\"ds-badge\">On your Mac</span>",
+      "css": ".ds-badge{display:inline-block;border:1px solid #cbd8cc;border-radius:999px;padding:6px 10px;color:#426c59;font:600 12px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "description": "A restrained container for content.",
+      "html": "<div class=\"ds-card\">Recording</div>",
+      "css": ".ds-card{background:#fff;border:1px solid rgba(220,228,220,.5);border-radius:12px;padding:16px;color:#253d3b;box-shadow:var(--shadow-card);font:500 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}"
+    },
+    {
+      "name": "Settings disclosure",
+      "kind": "custom",
+      "description": "Progressively reveal transcription controls.",
+      "html": "<details class=\"ds-disclosure\"><summary>Transcription settings <span>Base model \u00b7 Automatic language</span></summary><p>Model and language controls</p></details>",
+      "css": ".ds-disclosure{border-top:1px solid #dce4dc;padding:22px 0 4px;color:#253d3b;font:500 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}.ds-disclosure summary{cursor:pointer}.ds-disclosure summary:hover{color:#426c59}.ds-disclosure summary:focus-visible{outline:2px solid #315646;outline-offset:2px}.ds-disclosure span{display:block;color:#62746d;font-size:12px;margin-top:5px}.ds-disclosure p{font-size:13px;color:#62746d}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Reading Room",
+    "overview": "Wordvale is a quiet, task-led Mac workspace. Warm paper and muted green frame the work; familiar navigation and restrained system typography keep attention on recordings and transcripts.\n\nKeep the primary workflow easy to scan. Reveal advanced transcription controls when needed, and use status and motion to explain activity rather than decorate it.",
+    "keyCharacteristics": [
+      "Warm off-white workspace and muted green navigation.",
+      "Familiar Mac navigation and compact system typography.",
+      "Focused recording workflow with progressive disclosure.",
+      "Quiet borders, restrained elevation, and accessible interaction states."
+    ],
+    "rules": [],
+    "dos": [
+      "Do keep the recording workflow prominent and disclose advanced settings progressively.",
+      "Do use muted green for selected navigation and primary action.",
+      "Do retain clear keyboard focus and reduced-motion behavior."
+    ],
+    "donts": [
+      "Don't overwhelm the workspace with decorative animation or visual complexity.",
+      "Don't use strong elevation for ordinary workspace sections.",
+      "Don't hide the meaning of navigation when adapting the interface."
+    ]
+  }
+}

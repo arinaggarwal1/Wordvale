@@ -38,6 +38,16 @@ from model_registry import get_all_models, get_model_info, get_model_names, MODE
 from updater import AppUpdater
 from library import Library
 
+
+def parse_whisper_progress(line: str) -> Optional[int]:
+    """Read whisper-cli's progress callback, ignoring unrelated percentages."""
+    match = re.search(r"\bprogress\s*=\s*(\d{1,3})\s*%", line, re.IGNORECASE)
+    if not match:
+        return None
+    value = int(match.group(1))
+    return value if 0 <= value <= 100 else None
+
+
 # Shared user data directory
 APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/Wordvale")
 MODELS_DIR = os.path.join(APP_SUPPORT_DIR, "models")
@@ -530,7 +540,6 @@ class WhisperServer:
         task: str,
         threads: int,
         word_timestamps: bool,
-        progress_percent: int,
         progress_message: str,
         file_name: str,
     ) -> Dict[str, Any]:
@@ -544,6 +553,7 @@ class WhisperServer:
             "-t", str(threads),
             "-ojf" if word_timestamps else "-oj",
             "-of", output_base,
+            "-pp",
         ]
 
         if language and language != "auto" and language != "None":
@@ -558,7 +568,7 @@ class WhisperServer:
             "type": "progress",
             "stage": "transcribing" if task == "transcribe" else "translating",
             "file": file_name,
-            "percent": progress_percent,
+            "percent": None,
             "message": progress_message,
         })
 
@@ -576,8 +586,10 @@ class WhisperServer:
 
             stderr_buffer = []
             stdout_buffer = []
+            last_progress = -1
 
             def read_stream(stream, buffer, prefix):
+                nonlocal last_progress
                 try:
                     for line in iter(stream.readline, ''):
                         if not line:
@@ -585,6 +597,16 @@ class WhisperServer:
                         stripped = line.strip()
                         if stripped:
                             buffer.append(stripped)
+                            percent = parse_whisper_progress(stripped) if prefix == "whisper-cli" else None
+                            if percent is not None and percent > last_progress:
+                                last_progress = percent
+                                self._send_progress({
+                                    "type": "progress",
+                                    "stage": "transcribing" if task == "transcribe" else "translating",
+                                    "file": file_name,
+                                    "percent": percent,
+                                    "message": progress_message,
+                                })
                             sys.stderr.write(f"[{prefix}] {stripped}\n")
                             sys.stderr.flush()
                 except Exception:
@@ -616,6 +638,11 @@ class WhisperServer:
 
             stderr_thread.join(timeout=1.0)
             stdout_thread.join(timeout=1.0)
+
+            if self._active_process.stderr:
+                self._active_process.stderr.close()
+            if self._active_process.stdout:
+                self._active_process.stdout.close()
 
             returncode = self._active_process.returncode
             stderr_output = "\n".join(stderr_buffer)
@@ -684,7 +711,7 @@ class WhisperServer:
                 "type": "progress",
                 "stage": "converting_audio",
                 "file": os.path.basename(file_path),
-                "percent": 10,
+                "percent": None,
                 "message": "Converting audio to WAV format...",
             })
             wav_path = self._convert_to_wav(file_path)
@@ -705,7 +732,6 @@ class WhisperServer:
                 task="transcribe",
                 threads=threads,
                 word_timestamps=word_timestamps,
-                progress_percent=20,
                 progress_message=f"Transcribing original audio with {model_name}...",
                 file_name=file_name,
             )
@@ -721,7 +747,6 @@ class WhisperServer:
                     task="translate",
                     threads=threads,
                     word_timestamps=word_timestamps,
-                    progress_percent=65,
                     progress_message="Translating transcript to English...",
                     file_name=file_name,
                 )

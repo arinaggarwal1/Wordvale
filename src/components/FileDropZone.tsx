@@ -162,7 +162,7 @@ export default function FileDropZone({
             <div
                 onClick={handleBrowseClick}
                 className={`
-          relative rounded-xl border-2 border-dashed transition-all duration-300 cursor-pointer
+          relative rounded-xl border-2 border-dashed transition-all duration-300 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400
           ${isDragOver
                         ? "border-accent-400 bg-accent-500/10 drop-zone-active"
                         : hasFiles
@@ -248,9 +248,8 @@ export default function FileDropZone({
                         <p className="text-sm font-medium text-surface-200 mb-1">
                             {isDragOver ? "Drop your files here" : "Drop audio or video files here"}
                         </p>
-                        <p className="text-xs text-surface-500 text-center">
-                            or click to browse · MP3, WAV, FLAC, M4A, OGG, MP4 and more
-                        </p>
+                        <p className="text-xs text-surface-500 text-center">MP3, WAV, FLAC, M4A, OGG, MP4 and more</p>
+                        <button type="button" disabled={isTranscribing} onClick={(event) => { event.stopPropagation(); void handleBrowseClick(); }} className="btn-primary mt-4 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600">Choose files…</button>
                         <div className="flex items-center gap-1.5 mt-4">
                             <kbd className="px-1.5 py-0.5 rounded bg-surface-800 text-[10px] text-surface-400 font-mono border border-surface-700/50">
                                 ⌘

@@ -9,13 +9,15 @@ import {
     Languages,
     Loader2,
     ChevronDown,
+    LockKeyhole,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import * as Select from "@radix-ui/react-select";
 import type { WhisperModel } from "../types/models";
 import { SUPPORTED_LANGUAGES } from "../types/models";
 
 interface ModelSelectorProps {
     models: WhisperModel[];
+    downloadedModels: string[];
     currentModel: string | null;
     isLoading: boolean;
     selectedLanguage: string;
@@ -32,105 +34,30 @@ interface DropdownProps {
     icon: React.ReactNode;
     value: string;
     displayValue: string;
-    options: { value: string; label: string; sublabel?: string }[];
+    options: { value: string; label: string; sublabel?: string; locked?: boolean }[];
     onChange: (value: string) => void;
     disabled?: boolean;
-    typeAhead?: boolean;
 }
 
-function Dropdown({ label, icon, value, displayValue, options, onChange, disabled, typeAhead = false }: DropdownProps) {
-    const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-    const optionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-    const search = useRef({ text: "", at: 0 });
-    const [highlighted, setHighlighted] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (!typeAhead || !open) return;
-        function handleKeyDown(event: KeyboardEvent) {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                setOpen(false);
-                return;
-            }
-            if (event.key === "Enter" && highlighted) {
-                event.preventDefault();
-                onChange(highlighted);
-                setOpen(false);
-                return;
-            }
-            if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey || !/\p{L}/u.test(event.key)) return;
-            event.preventDefault();
-            const now = Date.now();
-            const prefix = now - search.current.at < 1000 ? search.current.text + event.key.toLocaleLowerCase() : event.key.toLocaleLowerCase();
-            search.current = { text: prefix, at: now };
-            const match = options.find((option) => option.label.toLocaleLowerCase().startsWith(prefix));
-            if (match) {
-                setHighlighted(match.value);
-                optionRefs.current.get(match.value)?.scrollIntoView({ block: "nearest" });
-            }
-        }
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [typeAhead, open, highlighted, onChange, options]);
-
-    useEffect(() => {
-        function handleClick(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, []);
-
+function Dropdown({ label, icon, value, displayValue, options, onChange, disabled }: DropdownProps) {
     return (
-        <div ref={ref} className="relative">
+        <div>
             <label className="label">{label}</label>
-            <button
-                onClick={() => {
-                    if (disabled) return;
-                    search.current = { text: "", at: 0 };
-                    setHighlighted(null);
-                    setOpen(!open);
-                }}
-                aria-expanded={open}
-                disabled={disabled}
-                className="select-trigger"
-            >
-                <span className="flex items-center gap-2 truncate">
-                    {icon}
-                    <span className="truncate">{displayValue}</span>
-                </span>
-                <ChevronDown className={`w-4 h-4 text-surface-400 transition-transform ${open ? "rotate-180" : ""}`} />
-            </button>
-
-            {open && (
-                <div className="absolute z-50 mt-1 w-full rounded-xl border border-surface-700/50 bg-surface-850 shadow-xl max-h-64 overflow-y-auto animate-fade-in">
-                    {options.map((opt) => (
-                        <button
-                            key={opt.value}
-                            ref={(element) => { if (element) optionRefs.current.set(opt.value, element); else optionRefs.current.delete(opt.value); }}
-                            onClick={() => {
-                                onChange(opt.value);
-                                setOpen(false);
-                            }}
-                            className={`
-                w-full text-left px-3 py-2.5 text-sm transition-colors
-                ${(highlighted ? opt.value === highlighted : opt.value === value)
-                                    ? "bg-accent-500/10 text-accent-300"
-                                    : "text-surface-200 hover:bg-surface-800/60"
-                                }
-              `}
-                        >
-                            <span className="block truncate">{opt.label}</span>
-                            {opt.sublabel && (
-                                <span className="block text-xs text-surface-500 mt-0.5">{opt.sublabel}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            )}
+            <Select.Root value={value || undefined} onValueChange={onChange} disabled={disabled}>
+                <Select.Trigger aria-label={`${label}: ${displayValue}`} className="select-trigger">
+                    <span className="flex min-w-0 items-center gap-2">{icon}<Select.Value placeholder={displayValue} /></span>
+                    <Select.Icon><ChevronDown className="w-4 h-4 text-surface-400" /></Select.Icon>
+                </Select.Trigger>
+                <Select.Portal>
+                    <Select.Content className="sidebar-select-content" position="popper" sideOffset={4} align="start" collisionPadding={8}>
+                        <Select.Viewport>
+                            {options.map((option) => <Select.Item key={option.value} value={option.value} textValue={`${option.label}${option.locked ? ", not downloaded" : ""}`} className="sidebar-select-item">
+                                <div className="flex min-w-0 flex-1 items-center justify-between gap-3"><div className="min-w-0"><Select.ItemText>{option.label}</Select.ItemText>{option.sublabel && <span className="block text-xs text-surface-500 mt-0.5">{option.sublabel}</span>}</div>{option.locked && <span className="flex shrink-0 items-center gap-1 text-xs text-surface-500"><LockKeyhole size={13} />Get model</span>}</div>
+                            </Select.Item>)}
+                        </Select.Viewport>
+                    </Select.Content>
+                </Select.Portal>
+            </Select.Root>
         </div>
     );
 }
@@ -154,6 +81,7 @@ function SpeedBar({ speed }: { speed: number }) {
 
 export default function ModelSelector({
     models,
+    downloadedModels,
     currentModel,
     isLoading,
     selectedLanguage,
@@ -164,10 +92,16 @@ export default function ModelSelector({
 }: ModelSelectorProps) {
     const selectedModel = models.find((m) => m.name === currentModel);
 
-    const modelOptions = models.map((m) => ({
+    const modelOptions = models.filter((m) => downloadedModels.includes(m.name)).map((m) => ({
         value: m.name,
         label: `${m.display_name}`,
         sublabel: `${m.parameter_count} · ~${m.estimated_vram_gb} GB VRAM · ${m.relative_speed}x speed`,
+    }));
+    const unavailableOptions = models.filter((m) => !downloadedModels.includes(m.name)).map((m) => ({
+        value: m.name,
+        label: m.display_name,
+        sublabel: `${m.parameter_count} · ${m.relative_speed}x speed`,
+        locked: true,
     }));
 
     const languageOptions = SUPPORTED_LANGUAGES.map((l) => ({
@@ -196,12 +130,13 @@ export default function ModelSelector({
                 displayValue={
                     isLoading
                         ? "Loading model..."
-                        : selectedModel?.display_name || "Select model"
+                        : selectedModel?.display_name || "Base (default)"
                 }
-                options={modelOptions}
+                options={[...modelOptions, ...unavailableOptions]}
                 onChange={onModelSelect}
                 disabled={isLoading}
             />
+            {!currentModel && !isLoading && <p className="text-xs leading-relaxed text-surface-400">Base turns speech into text locally. Its first download needs internet.</p>}
 
             {/* Speed indicator for selected model */}
             {selectedModel && (
@@ -224,7 +159,6 @@ export default function ModelSelector({
                 }
                 options={languageOptions}
                 onChange={onLanguageChange}
-                typeAhead
             />
 
             {currentModel?.endsWith(".en") && selectedLanguage !== "en" && (

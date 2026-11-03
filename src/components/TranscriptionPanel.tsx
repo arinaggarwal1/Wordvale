@@ -143,13 +143,14 @@ export default function TranscriptionPanel({
     return (
         <div className="card flex flex-col h-full">
             {/* ─── Tab bar ─── */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-800/50 px-4 py-2">
+            {hasContent && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-800/50 px-4 py-2">
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
+                                aria-pressed={activeTab === tab.id}
                                 className={`
                     flex items-center gap-1.5 px-4 py-3 text-xs font-medium transition-all border-b-2
                     ${activeTab === tab.id
@@ -168,6 +169,7 @@ export default function TranscriptionPanel({
                         <div className="flex items-center rounded-lg border border-surface-800/70 bg-surface-900/70 p-1">
                             <button
                                 onClick={() => onTranscriptViewChange("original")}
+                                aria-pressed={selectedTranscriptView === "original"}
                                 className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                                     selectedTranscriptView === "original"
                                         ? "bg-accent-500/20 text-accent-300"
@@ -178,6 +180,7 @@ export default function TranscriptionPanel({
                             </button>
                             <button
                                 onClick={() => onTranscriptViewChange("english")}
+                                aria-pressed={selectedTranscriptView === "english"}
                                 className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                                     selectedTranscriptView === "english"
                                         ? "bg-accent-500/20 text-accent-300"
@@ -200,7 +203,7 @@ export default function TranscriptionPanel({
                         {copied ? "Copied" : "Copy"}
                     </button>
                 )}
-            </div>
+            </div>}
 
             {/* ─── Content ─── */}
             <div
@@ -229,7 +232,7 @@ export default function TranscriptionPanel({
                             <>
                                 <p className="text-sm text-surface-400 mb-1">No transcription yet</p>
                                 <p className="text-xs text-surface-500">
-                                    Select an audio file and click Start to begin
+                                    Add an audio or video file, then choose Start transcription.
                                 </p>
                             </>
                         )}

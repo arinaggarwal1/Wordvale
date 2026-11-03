@@ -154,7 +154,7 @@ export interface BackendResponse {
 export interface ProgressUpdate {
     type: "progress" | "partial_result";
     stage: string;
-    percent: number;
+    percent: number | null;
     message?: string;
     file?: string;
     segment_index?: number;

@@ -62,7 +62,7 @@ interface UseWhisperReturn {
     retryQueueItem: (id: string) => void;
     markSaved: (id: string, view: "original" | "english") => void;
     linkQueueToLibrary: (id: string, libraryId: string, result?: TranscriptionResult) => void;
-    processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string, onlyId?: string) => Promise<void>;
+    processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string, onlyId?: string) => Promise<string | undefined>;
     updateCommand: (command: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
     clearError: () => void;
     getSystemInfo: () => Promise<void>;
@@ -73,6 +73,7 @@ interface UseWhisperReturn {
 }
 
 let requestId = 0;
+const LAST_MODEL_KEY = "wordvale.lastModel";
 function nextId(): string {
     return `req_${++requestId}_${Date.now()}`;
 }
@@ -83,6 +84,7 @@ export function useWhisper(): UseWhisperReturn {
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const [currentModel, setCurrentModel] = useState<string | null>(null);
+    const restoredModel = useRef(false);
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [modelStorage, setModelStorage] = useState<ModelStorageInfo | null>(null);
     const [modelDownload, setModelDownload] = useState<ModelDownload | null>(null);
@@ -328,6 +330,18 @@ export function useWhisper(): UseWhisperReturn {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isBackendReady]);
 
+    useEffect(() => {
+        if (restoredModel.current || !isBackendReady || !modelStorage || models.length === 0) return;
+        restoredModel.current = true;
+        let saved: string | null = null;
+        try { saved = localStorage.getItem(LAST_MODEL_KEY); } catch { /* Storage can be unavailable. */ }
+        if (saved && modelStorage.downloaded_models.some((model) => model.name === saved)) {
+            void loadModel(saved);
+        } else if (saved) {
+            try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
+        }
+    }, [isBackendReady, modelStorage, models]);
+
     // ─── Actions ───
 
     async function loadModelList() {
@@ -371,6 +385,7 @@ export function useWhisper(): UseWhisperReturn {
             if (result.status === "cancelled") return false;
             if (activate) {
                 setCurrentModel(modelName);
+                try { localStorage.setItem(LAST_MODEL_KEY, modelName); } catch { /* Model still loads for this session. */ }
                 setSystemInfo((prev) => prev ? { ...prev, current_model: modelName, model_loaded: true } : prev);
             }
             await getModelStorage();
@@ -454,6 +469,7 @@ export function useWhisper(): UseWhisperReturn {
             }
             if (currentModel === modelName) {
                 setCurrentModel(null);
+                try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
                 setSystemInfo((prev) =>
                     prev ? { ...prev, current_model: null, model_loaded: false } : prev
                 );
@@ -475,10 +491,14 @@ export function useWhisper(): UseWhisperReturn {
             if (result.status === "partial") {
                 await Promise.all([getSystemInfo(), getModelStorage()]);
                 const deleted = result.deleted_models as string[];
-                if (currentModel && deleted.includes(currentModel)) setCurrentModel(null);
+                if (currentModel && deleted.includes(currentModel)) {
+                    setCurrentModel(null);
+                    try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
+                }
                 throw new Error("Some models could not be removed. Refresh the list and try again.");
             }
             setCurrentModel(null);
+            try { localStorage.removeItem(LAST_MODEL_KEY); } catch { /* Ignore unavailable storage. */ }
             setSystemInfo((prev) =>
                 prev ? { ...prev, current_model: null, model_loaded: false } : prev
             );
@@ -550,30 +570,6 @@ export function useWhisper(): UseWhisperReturn {
         );
     }
 
-    useEffect(() => {
-        if (!isTranscribing || !progress) return;
-
-        setQueue((prev) => {
-            const processingIndex = prev.findIndex((item) => item.status === "processing");
-            if (processingIndex === -1) return prev;
-
-            const processingItem = prev[processingIndex];
-            const nextProgress = Math.max(
-                processingItem.progress,
-                Math.min(progress.percent ?? 0, 100)
-            );
-
-            if (nextProgress === processingItem.progress) return prev;
-
-            const updated = [...prev];
-            updated[processingIndex] = {
-                ...processingItem,
-                progress: nextProgress,
-            };
-            return updated;
-        });
-    }, [isTranscribing, progress]);
-
     async function processQueue(
         settings: AdvancedSettings,
         language: string,
@@ -587,6 +583,7 @@ export function useWhisper(): UseWhisperReturn {
         setIsTranscribing(true);
         isCancellingQueueRef.current = false;
         setError(null);
+        let lastCompletedId: string | undefined;
 
         try {
             while (!isCancellingQueueRef.current) {
@@ -632,6 +629,7 @@ export function useWhisper(): UseWhisperReturn {
                         saveError,
                         error: undefined,
                     });
+                    lastCompletedId = nextItem.id;
                 } catch (err) {
                     if (isCancellingQueueRef.current) {
                         updateQueueItem(nextItem.id, {
@@ -656,6 +654,7 @@ export function useWhisper(): UseWhisperReturn {
             isCancellingQueueRef.current = false;
             setIsStopping(false);
         }
+        return lastCompletedId;
     }
 
     function clearError() {

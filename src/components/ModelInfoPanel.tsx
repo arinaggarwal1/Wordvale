@@ -137,7 +137,7 @@ export default function ModelInfoPanel({
                         </div>
                     </div>
                 ) : (
-                    <p id={modelDetailsId} className="text-xs text-surface-500 italic">Select a model to view details</p>
+                    <p id={modelDetailsId} className="text-xs text-surface-500">Base loads when you start, or choose another model.</p>
                 )}
             </div>
 
@@ -194,16 +194,14 @@ export default function ModelInfoPanel({
                                 <span className="text-xs text-surface-400">
                                     {progress?.message || progress?.stage || "Processing..."}
                                 </span>
-                                <span className="text-xs font-mono text-accent-400">
-                                    {progress?.percent || 0}%
-                                </span>
+                                {progress?.percent != null && <span className="text-xs font-mono text-accent-400">{progress.percent}%</span>}
                             </div>
-                            <div className="h-2 rounded-full bg-surface-800 overflow-hidden">
+                            {progress?.percent != null && <div role="progressbar" aria-label={progress.stage === "translating" ? "Translation pass progress" : "Transcription pass progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent} className="h-2 rounded-full bg-surface-800 overflow-hidden">
                                 <div
                                     className="h-full rounded-full progress-bar transition-all duration-500"
-                                    style={{ width: `${progress?.percent || 0}%` }}
+                                    style={{ width: `${progress.percent}%` }}
                                 />
-                            </div>
+                            </div>}
                         </div>
 
                         <StatRow

@@ -19,7 +19,7 @@ import {
     Download,
     LibraryBig,
 } from "lucide-react";
-import type { QueueItem, QueueItemStatus } from "../types/models";
+import type { ProgressUpdate, QueueItem, QueueItemStatus } from "../types/models";
 import { estimateTime, formatDuration } from "../constants";
 
 interface QueuePanelProps {
@@ -32,6 +32,7 @@ interface QueuePanelProps {
     onBatchSaveLibrary: () => void;
     canRun: boolean;
     onReorder: (fromIndex: number, toIndex: number) => void;
+    progress: ProgressUpdate | null;
     currentModel: string | null;
     onSelect: (id: string | null) => void;
     selectedId: string | null;
@@ -74,6 +75,7 @@ export default function QueuePanel({
     onBatchSaveLibrary,
     canRun,
     onReorder,
+    progress,
     currentModel,
     onSelect,
     selectedId,
@@ -91,9 +93,7 @@ export default function QueuePanel({
     const pendingQueueIndexes = pendingItems.map((item) =>
         queue.findIndex((queuedItem) => queuedItem.id === item.id)
     );
-    const remainingEstimate = queue
-        .filter((item) => item.status === "pending" || item.status === "processing")
-        .reduce((total, item) => total + estimateTime(item.fileSizeMb, currentModel), 0);
+    const remainingEstimate = queue.filter((item) => item.status === "pending" || item.status === "processing").reduce((total, item) => total + estimateTime(item.fileSizeMb, currentModel), 0);
     const headerSummary = processingItems.length > 0
         ? `Processing ${processingItems[0].fileName}`
         : pendingItems.length > 0
@@ -138,9 +138,9 @@ export default function QueuePanel({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                                <p className={`text-sm font-medium truncate ${isSelected ? "text-accent-200" : "text-surface-100"}`}>
+                                <button type="button" aria-pressed={isSelected} onClick={(event) => { event.stopPropagation(); onSelect(isSelected ? null : item.id); }} className={`block max-w-full truncate rounded text-left text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400 ${isSelected ? "text-accent-200" : "text-surface-100"}`}>
                                     {item.fileName}
-                                </p>
+                                </button>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-surface-500">
                                     <span>{item.fileSizeMb} MB</span>
                                     <span>•</span>
@@ -168,6 +168,7 @@ export default function QueuePanel({
                                             disabled={!canMoveUp}
                                             className="p-1.5 rounded-lg text-surface-500 hover:text-surface-200 hover:bg-surface-800/70 disabled:opacity-30"
                                             title="Move up"
+                                            aria-label={`Move ${item.fileName} up in queue`}
                                         >
                                             <ChevronUp className="w-3.5 h-3.5" />
                                         </button>
@@ -176,6 +177,7 @@ export default function QueuePanel({
                                             disabled={!canMoveDown}
                                             className="p-1.5 rounded-lg text-surface-500 hover:text-surface-200 hover:bg-surface-800/70 disabled:opacity-30"
                                             title="Move down"
+                                            aria-label={`Move ${item.fileName} down in queue`}
                                         >
                                             <ChevronDown className="w-3.5 h-3.5" />
                                         </button>
@@ -208,6 +210,7 @@ export default function QueuePanel({
                                     disabled={disableRemove}
                                     className="p-1.5 rounded-lg text-surface-500 hover:text-danger-300 hover:bg-danger-500/10 transition-colors disabled:opacity-30"
                                     title={disableRemove ? "Cannot remove the file currently being processed" : "Remove"}
+                                    aria-label={`Remove ${item.fileName} from queue`}
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -216,12 +219,8 @@ export default function QueuePanel({
 
                         {isProcessing && (
                             <div className="mt-2.5">
-                                <div className="h-1.5 rounded-full bg-surface-800 overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full progress-bar transition-all duration-300"
-                                        style={{ width: `${item.progress}%` }}
-                                    />
-                                </div>
+                                <div className="mb-1 flex justify-between gap-2 text-xs text-surface-400"><span>{progress?.message || "Preparing…"}</span>{progress?.percent != null && <span>{progress.percent}%</span>}</div>
+                                {progress?.percent != null && <div role="progressbar" aria-label={progress.stage === "translating" ? "Translation pass progress" : "Transcription pass progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent} className="h-1.5 rounded-full bg-surface-800 overflow-hidden"><div className="h-full rounded-full progress-bar transition-all duration-300" style={{ width: `${progress.percent}%` }} /></div>}
                             </div>
                         )}
 
@@ -256,12 +255,7 @@ export default function QueuePanel({
                     </div>
 
                     {completedCount > 0 && <><button onClick={onBatchSaveLibrary} className="btn-ghost shrink-0 border border-surface-700/50 bg-surface-800/30 text-xs"><LibraryBig className="h-4 w-4" /> Save to library</button><button onClick={onBatchExport} className="btn-ghost shrink-0 border border-surface-700/50 bg-surface-800/30 text-xs" aria-label="Export completed transcripts"><Download className="h-4 w-4" /> Export</button></>}
-                    <div className="rounded-lg border border-surface-800/60 bg-surface-900/50 px-3 py-2 text-right shrink-0">
-                        <p className="text-[10px] uppercase tracking-wider text-surface-500">Remaining</p>
-                        <p className="mt-0.5 text-sm font-semibold text-surface-100">
-                            {remainingEstimate > 0 ? formatDuration(remainingEstimate) : "0s"}
-                        </p>
-                    </div>
+                    <div className="rounded-lg border border-surface-800/60 bg-surface-900/50 px-3 py-2 text-right shrink-0"><p className="text-[10px] uppercase tracking-wider text-surface-500">Remaining</p><p className="mt-0.5 text-sm font-semibold text-surface-100">{remainingEstimate > 0 ? formatDuration(remainingEstimate) : "0s"}</p></div>
                 </div>
             </div>
 

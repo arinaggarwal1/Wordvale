@@ -13,13 +13,14 @@ import {
     AudioWaveform,
     Play,
     Square,
-    Loader2,
     AlertTriangle,
     X,
     Settings,
-    ArrowRight,
     HardDrive,
     LibraryBig,
+    FileText,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/tauri";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -44,6 +45,7 @@ import SaveLibraryDialog from "./components/SaveLibraryDialog";
 import SettingsPage from "./components/SettingsPage";
 
 export default function App() {
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showModels, setShowModels] = useState(false);
     const [showLibrary, setShowLibrary] = useState(false);
@@ -282,13 +284,14 @@ export default function App() {
                 if (!await loadModel("base")) return;
             }
 
-            await processQueue(
+            const completedId = await processQueue(
                 settings,
                 selectedLanguage,
                 selectedTask,
                 outputDir,
                 onlyId
             );
+            if (completedId) setSelectedQueueId((selected) => selected ?? completedId);
         } finally {
             startInProgress.current = false;
             setIsStarting(false);
@@ -332,15 +335,14 @@ export default function App() {
     const completedCount = queue.filter((item) => item.status === "completed").length;
     const failedCount = queue.filter((item) => item.status === "failed").length;
     const currentProcessingItem = queue.find((item) => item.status === "processing") || null;
-    const queuedEstimateSeconds = queue
-        .filter((item) => item.status === "pending" || item.status === "processing")
-        .reduce((total, item) => total + estimateTime(item.fileSizeMb, currentModel), 0);
+    const queuedEstimateSeconds = queue.filter((item) => item.status === "pending" || item.status === "processing").reduce((total, item) => total + estimateTime(item.fileSizeMb, currentModel), 0);
 
     const hasCompletedResults = queue.some((item) => item.result);
 
+
     // Determine which result to display:
     // while transcribing, follow the live result unless the user explicitly selects another item.
-    // after transcription, require an explicit selection so the panel does not imply a file is active.
+    // after transcription, show the last successful result unless the user selected another item.
     const selectedQueueItem = selectedQueueId ? queue.find((q) => q.id === selectedQueueId) : null;
     const listeningItem = listeningId ? queue.find((item) => item.id === listeningId) : null;
     const displayedResult = selectedQueueItem ? selectedQueueItem.result ?? null : (isTranscribing ? activeResult : null);
@@ -356,86 +358,32 @@ export default function App() {
 
     return (
         <div className="h-screen flex flex-col bg-surface-950">
-            {/* ─── Main layout ─── */}
-            <div className="flex-1 flex min-h-0">
-                {/* ═══════════════ LEFT SIDEBAR ═══════════════ */}
-                <aside className="w-72 border-r border-surface-800/30 bg-surface-900/40 flex flex-col">
-                    {/* Logo */}
-                    <div className="px-5 pt-5 pb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-purple-500 flex items-center justify-center shadow-lg">
-                                <AudioWaveform className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-base font-bold text-surface-100 leading-tight">Wordvale</h1>
-                                <p className="text-[10px] text-surface-500 font-medium">Offline Transcription</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Model / Language / Task selectors */}
-                    <div className="px-5 flex-1 overflow-y-auto">
-                        <ModelSelector
-                            models={models}
-                            currentModel={currentModel}
-                            isLoading={isModelLoading || isTranscribing || !modelStorage}
-                            selectedLanguage={selectedLanguage}
-                            selectedTask={selectedTask}
-                            onModelSelect={handleModelSelect}
-                            onLanguageChange={setSelectedLanguage}
-                            onTaskChange={setSelectedTask}
-                        />
-
-                        {/* Advanced Settings */}
-                        <AdvancedSettingsPanel
-                            settings={settings}
-                            onSettingsChange={setSettings}
-                        />
-                    </div>
-
-                    {/* Start / Stop button */}
-                    <div className="p-5 border-t border-surface-800/30">
-                        <button onClick={() => { setShowModels(false); setShowLibrary(false); setShowSettings(true); }} className="btn-ghost w-full justify-center mb-3" aria-pressed={showSettings}>
-                            <Settings className="w-4 h-4" /> Settings
-                        </button>
+            <div className="app-shell flex-1 flex min-h-0">
+                <aside className={`app-navigation${sidebarCollapsed ? " is-collapsed" : ""}`} aria-label="Main navigation">
+                    <div className="app-brand"><span className="app-brand-icon"><AudioWaveform size={20} /></span><div className="app-brand-copy"><h1>Wordvale</h1><p>Private transcription</p></div><button type="button" className="sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button></div>
+                    <nav className="app-nav-links">
+                        <button aria-label="Transcribe" className={!showLibrary && !showModels && !showSettings ? "active" : ""} aria-current={!showLibrary && !showModels && !showSettings ? "page" : undefined} onClick={() => { setShowLibrary(false); setShowModels(false); setShowSettings(false); }}><FileText size={17} /><span>Transcribe</span></button>
+                        <button aria-label="Library" className={showLibrary ? "active" : ""} aria-current={showLibrary ? "page" : undefined} onClick={() => { setShowLibrary(true); setShowModels(false); setShowSettings(false); }}><LibraryBig size={17} /><span>Library</span></button>
+                        <button aria-label="Models" className={showModels ? "active" : ""} aria-current={showModels ? "page" : undefined} onClick={() => { setShowModels(true); setShowLibrary(false); setShowSettings(false); }}><HardDrive size={17} /><span>Models</span></button>
+                        <button aria-label="Settings" className={showSettings ? "active" : ""} aria-current={showSettings ? "page" : undefined} onClick={() => { setShowSettings(true); setShowLibrary(false); setShowModels(false); }}><Settings size={17} /><span>Settings</span></button>
+                    </nav>
+                    {!sidebarCollapsed && !showLibrary && !showModels && !showSettings && <section className="sidebar-settings" aria-labelledby="transcription-settings-title">
+                        <div className="sidebar-settings-heading"><h2 id="transcription-settings-title">Transcription settings</h2><p>{selectedModelInfo?.display_name || "Base model"} · {selectedLanguage === "auto" ? "Automatic language" : selectedLanguage}</p></div>
+                        <ModelSelector models={models} downloadedModels={modelStorage?.downloaded_models.map((model) => model.name) ?? []} currentModel={currentModel} isLoading={isModelLoading || isTranscribing || !modelStorage} selectedLanguage={selectedLanguage} selectedTask={selectedTask} onModelSelect={handleModelSelect} onLanguageChange={setSelectedLanguage} onTaskChange={setSelectedTask} />
+                        <AdvancedSettingsPanel settings={settings} onSettingsChange={setSettings} />
+                    </section>}
+                    <div className="sidebar-actions">
                         {isTranscribing ? (
-                            <button
-                                onClick={cancelTranscription}
-                                disabled={isStopping}
-                                className="w-full flex items-center justify-center gap-2 rounded-xl bg-danger-500/10 border border-danger-500/30
-                           text-danger-400 py-3 text-sm font-semibold transition-all hover:bg-danger-500/20 active:scale-[0.98]"
-                            >
-                                <Square className="w-4 h-4" />
-                                {isStopping ? "Stopping..." : "Stop"}
+                            <button onClick={cancelTranscription} disabled={isStopping} className="btn-secondary sidebar-transcription-button" aria-label={isStopping ? "Stopping transcription" : "Stop transcription"}>
+                                <Square size={16} /><span>{isStopping ? "Stopping…" : "Stop transcription"}</span>
                             </button>
                         ) : (
-                            <button
-                                onClick={() => void handleStart()}
-                                disabled={pendingCount === 0 || isModelLoading || isStarting || !modelStorage || Boolean(currentModel?.endsWith(".en") && selectedLanguage !== "en") || Boolean(selectedTask === "translate" && selectedModelInfo?.translation_support === false)}
-                                className="btn-primary w-full py-3 text-sm font-semibold rounded-xl"
-                            >
-                                {isModelLoading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Loading Model...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="w-4 h-4" />
-                                        {pendingCount <= 1 ? "Start Queue" : `Process ${pendingCount} Files`}
-                                    </>
-                                )}
+                            <button onClick={() => void handleStart()} disabled={pendingCount === 0 || isModelLoading || isStarting || !modelStorage || Boolean(currentModel?.endsWith(".en") && selectedLanguage !== "en") || Boolean(selectedTask === "translate" && selectedModelInfo?.translation_support === false)} className="btn-primary sidebar-transcription-button" aria-label={isModelLoading ? "Loading model" : pendingCount <= 1 ? "Start transcription" : `Transcribe ${pendingCount} files`}>
+                                <Play size={16} /><span>{isModelLoading ? "Loading model…" : pendingCount <= 1 ? "Start transcription" : `Transcribe ${pendingCount} files`}</span>
                             </button>
                         )}
-
-                        {/* Keyboard shortcut hint */}
-                        <div className="flex items-center justify-center gap-1.5 mt-2">
-                            <kbd className="px-1.5 py-0.5 rounded bg-surface-800 text-[10px] text-surface-500 font-mono border border-surface-700/50">⌘</kbd>
-                            <kbd className="px-1.5 py-0.5 rounded bg-surface-800 text-[10px] text-surface-500 font-mono border border-surface-700/50">↵</kbd>
-                        </div>
                     </div>
                 </aside>
-
                 {showLibrary ? (
                     <LibraryPage items={libraryItems} loading={libraryLoading} error={libraryError} onBack={() => setShowLibrary(false)} command={updateCommand} onRefresh={refreshLibrary} onQueue={async (item) => { if (!item.audio_path || !item.audio_available) throw new Error("Relink the recording before adding it to the queue."); const metadata = await invoke<{ size: number }>("get_file_metadata", { path: item.audio_path }); addToQueue([{ path: item.audio_path, size: metadata.size, libraryId: item.id, fileName: item.audio_name || item.name }]); }} />
                 ) : showModels ? (
@@ -443,20 +391,12 @@ export default function App() {
                 ) : showSettings ? (
                     <SettingsPage onBack={() => setShowSettings(false)} logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} updateCommand={updateCommand} updateBlocked={isTranscribing || isModelLoading || hasUnsaved(queue)} />
                 ) : (<>
-                {/* ═══════════════ MAIN CONTENT ═══════════════ */}
-                <main className="flex-1 flex flex-col min-w-0 min-h-0 p-5 gap-4 overflow-y-auto">
-                    {/* File drop zone */}
-                    <FileDropZone
-                        onFilesSelected={addToQueue}
-                        isTranscribing={isTranscribing}
-                        queueCount={queue.length}
-                        pendingCount={pendingCount}
-                        completedCount={completedCount}
-                        failedCount={failedCount}
-                        queuedEstimate={queue.length > 0 ? formatDuration(queuedEstimateSeconds) : null}
-                    />
-
-                    {/* Queue */}
+                <div className="transcription-layout flex-1 min-w-0 min-h-0">
+                <main className="workspace flex-1 min-w-0 min-h-0 overflow-y-auto">
+                    <header className="workspace-header"><div><h2>Transcribe</h2><p>Turn your recordings into text, privately.</p></div></header>
+                    <div className="workspace-content">
+                        {!queue.length && <div className="workspace-intro"><h3>Start with a recording</h3><p>Choose an audio or video file to create a transcript.</p></div>}
+                        <FileDropZone onFilesSelected={addToQueue} isTranscribing={isTranscribing} queueCount={queue.length} pendingCount={pendingCount} completedCount={completedCount} failedCount={failedCount} queuedEstimate={queue.length > 0 ? formatDuration(queuedEstimateSeconds) : null} />
                     <QueuePanel
                         queue={queue}
                         onRemove={handleRemoveFromQueue}
@@ -467,14 +407,14 @@ export default function App() {
                         onBatchSaveLibrary={() => setLibrarySaveIds(queue.filter((item) => item.status === "completed").map((item) => item.id))}
                         canRun={isBackendReady && !isTranscribing && !isModelLoading && !isStarting && Boolean(modelStorage) && !(currentModel?.endsWith(".en") && selectedLanguage !== "en") && !(selectedTask === "translate" && selectedModelInfo?.translation_support === false)}
                         onReorder={reorderQueue}
+                        progress={progress}
                         currentModel={currentModel}
                         onSelect={setSelectedQueueId}
                         selectedId={selectedQueueId ?? currentProcessingItem?.id ?? null}
                         isTranscribing={isTranscribing}
                     />
 
-                    {/* Transcription output */}
-                    <div className="flex-1 min-h-[360px] shrink-0">
+                    {(queue.length > 0 || isTranscribing) && <div className="flex-1 min-h-[360px] shrink-0">
                         <TranscriptionPanel
                             result={displayedResult}
                             progress={progress}
@@ -485,37 +425,15 @@ export default function App() {
                             selectedTranscriptView={selectedTranscriptView}
                             onTranscriptViewChange={setSelectedTranscriptView}
                         />
+                    </div>}
+
                     </div>
                 </main>
-
-                {/* ═══════════════ RIGHT PANEL ═══════════════ */}
-                <aside className="w-72 border-l border-surface-800/30 bg-surface-900/20 p-4 overflow-y-auto">
-                    <ModelInfoPanel
-                        model={selectedModelInfo}
-                        systemInfo={systemInfo}
-                        progress={progress}
-                        isTranscribing={isTranscribing}
-                        elapsedTime={elapsedTime}
-                    />
-
-                    <button onClick={() => { setShowSettings(false); setShowModels(true); }} className="card group mt-4 flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-accent-500/40 hover:bg-surface-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">
-                        <HardDrive className="h-4 w-4 shrink-0 text-accent-400" />
-                        <span className="min-w-0 flex-1">
-                            <span className="block text-xs font-semibold uppercase tracking-wider text-surface-300">Manage models</span>
-                            <span className="mt-1 block text-xs text-surface-500">{modelStorage?.downloaded_count ?? "—"} downloaded</span>
-                        </span>
-                        <ArrowRight className="h-4 w-4 shrink-0 text-surface-500 transition-colors group-hover:text-accent-400" aria-hidden="true" />
-                    </button>
-
-                    <button onClick={() => { setShowSettings(false); setShowModels(false); setShowLibrary(true); }} className="card group mt-4 flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-accent-500/40 hover:bg-surface-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">
-                        <LibraryBig className="h-4 w-4 shrink-0 text-accent-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-semibold uppercase tracking-wider text-surface-300">Library</span><span className="mt-1 block text-xs text-surface-500">Saved recordings and transcripts</span></span><ArrowRight className="h-4 w-4 shrink-0 text-surface-500 group-hover:text-accent-400" aria-hidden="true" />
-                    </button>
-
-                    <div className="mt-4">
-                        <ExportPanel result={displayedResult} selectedTranscriptView={selectedTranscriptView} showTranscriptViewSelector={displayedResultHasTranslation} onSaved={(view) => { if (selectedQueueItem?.result === displayedResult) markSaved(selectedQueueItem.id, view); }} />
-                    </div>
-
+                <aside className="transcription-sidebar" aria-label="Transcription details and export">
+                    <ModelInfoPanel model={selectedModelInfo} systemInfo={systemInfo} progress={progress} isTranscribing={isTranscribing} elapsedTime={elapsedTime} />
+                    <ExportPanel result={displayedResult} selectedTranscriptView={selectedTranscriptView} showTranscriptViewSelector={displayedResultHasTranslation} onSaved={(view) => { if (selectedQueueItem?.result === displayedResult) markSaved(selectedQueueItem.id, view); }} />
                 </aside>
+                </div>
                 </>)}
             </div>
 
@@ -587,14 +505,15 @@ export default function App() {
 
             {/* ─── Error toast ─── */}
             {error && (
-                <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
+                <div role="alert" className="fixed bottom-6 right-6 z-50 animate-slide-up">
                     <div className="flex items-start gap-3 rounded-xl border border-danger-500/30 bg-surface-900/95 backdrop-blur-md p-4 shadow-xl max-w-sm">
                         <AlertTriangle className="w-5 h-5 text-danger-400 shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-surface-100 mb-0.5">Error</p>
-                            <p className="text-xs text-surface-400 break-words">{error}</p>
+                            <p className="text-sm font-medium text-surface-100 mb-0.5">Something needs attention</p>
+                            <p className="text-xs text-surface-300">Check the details below, then retry the action. Your queue remains available.</p>
+                            <details className="mt-2 text-xs text-surface-400"><summary className="cursor-pointer">Show details</summary><p className="mt-1 break-words">{error}</p></details>
                         </div>
-                        <button onClick={clearError} className="text-surface-500 hover:text-surface-200 transition-colors">
+                        <button onClick={clearError} aria-label="Dismiss error" className="text-surface-400 hover:text-surface-200 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
