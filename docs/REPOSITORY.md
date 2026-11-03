@@ -22,6 +22,7 @@ Use this page to find the source of a feature before changing it. Generated buil
 | Path | What belongs here |
 | --- | --- |
 | `scripts/` | App packaging and distribution scripts |
+| `website/` | Standalone product website, local fonts, and interactive demo |
 | `tests/` | Frontend utility tests using Node's built-in test runner |
 | `backend/tests/` | Python backend tests |
 | `.github/workflows/` | Release automation |

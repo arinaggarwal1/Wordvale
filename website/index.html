@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en" data-theme="reading">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#faf8f3" />
+    <meta
+      name="description"
+      content="Record meetings, turn audio into transcripts, and keep the words that matter. Wordvale is a thoughtfully made transcription app for your Mac."
+    />
+    <title>Wordvale — Keep the conversation going.</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+    <script src="releases.js" defer></script>
+    <script src="use-cases.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="nav wrap">
+      <a href="#" class="brand" aria-label="Wordvale home"
+        ><svg viewBox="0 0 48 48" aria-hidden="true">
+          <path
+            d="M4 25c5 0 1-15 7-15s1 30 7 30 1-36 7-36 1 30 7 30 1-14 8-14"
+          /></svg
+        >wordvale</a
+      >
+      <nav aria-label="Main navigation">
+        <a href="#workflow">The flow</a>
+        <a href="#use-cases">Use cases</a><a href="#appearance">Make it yours</a
+        ><a href="https://github.com/arinaggarwal1/Wordvale">GitHub ↗</a>
+      </nav>
+      <a class="nav-download" href="#download">Get Wordvale ↓</a>
+    </header>
+    <main id="main">
+      <section class="hero wrap">
+        <div class="hero-copy">
+          <h1>Keep the<br />conversation<br /><em>going.</em></h1>
+          <p>
+            A meeting. A voice note. That one good idea.<br />Record it,
+            transcribe it, and make it yours.
+          </p>
+          <a
+            class="button primary"
+            href="https://github.com/arinaggarwal1/Wordvale/releases/latest/download/Wordvale-macOS-arm64.dmg"
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5" /></svg
+            >Download for Mac</a
+          >
+          <div class="download-note">
+            Apple silicon <span>·</span>
+            <a
+              data-release-version
+              href="https://github.com/arinaggarwal1/Wordvale/releases/latest"
+              >Latest release</a
+            >
+            <span class="alpha-dot"></span>
+          </div>
+        </div>
+        <div class="demo-scene">
+          <div class="scene-caption">
+            <span class="live-dot"></span>A little less friction. A lot more
+            flow.
+          </div>
+          <div class="app-demo">
+            <div class="window-bar">
+              <div class="traffic"><i></i><i></i><i></i></div>
+              <span>wordvale</span
+              ><span class="demo-label">Interactive preview</span>
+            </div>
+            <div class="demo-body">
+              <aside class="demo-side">
+                <svg class="small-mark" viewBox="0 0 48 48" aria-hidden="true">
+                  <path
+                    d="M4 25c5 0 1-15 7-15s1 30 7 30 1-36 7-36 1 30 7 30 1-14 8-14"
+                  /></svg
+                ><span class="side-tab active" data-side="record">Record</span
+                ><span class="side-tab" data-side="transcript">Transcribe</span
+                ><span>Library</span><span class="side-bottom">Settings</span>
+              </aside>
+              <div class="demo-content">
+                <div class="demo-heading">
+                  <span id="demo-heading">A thought worth keeping</span
+                  ><span class="mini-status" id="mini-status">Ready</span>
+                </div>
+                <div id="record-view">
+                  <div class="wave-orbit">
+                    <svg
+                      id="wave"
+                      viewBox="0 0 240 150"
+                      role="img"
+                      aria-label="Animated Wordvale waveform"
+                    >
+                      <path
+                        id="wave-path"
+                        d="M24 79 C51 79 31 37 57 37 S68 120 95 120 S102 20 128 20 S138 108 162 108 S173 66 204 66"
+                      />
+                    </svg>
+                  </div>
+                  <div class="timer" id="timer">00:00</div>
+                  <p class="record-status" id="record-status">
+                    Space for your next good idea.
+                  </p>
+                  <div class="source-row">
+                    <span><i class="source-dot"></i>Microphone</span
+                    ><span><i class="source-dot"></i>Computer audio</span>
+                  </div>
+                  <button class="record-button" id="record-button">
+                    <span class="record-circle"></span
+                    ><span id="record-label">Try recording</span>
+                  </button>
+                </div>
+                <div id="transcript-view" hidden>
+                  <div class="transcript-meta">
+                    Design catch-up <span>· 0:24</span>
+                  </div>
+                  <h3>The idea is the<br />important part.</h3>
+                  <p class="transcript-line">
+                    <span>00:00</span>What if we made a little more space for
+                    the conversation?
+                  </p>
+                  <p class="transcript-line">
+                    <span>00:08</span>Less switching between tools. Just record,
+                    find the words, and keep going.
+                  </p>
+                  <div class="transcript-actions">
+                    <button id="export-demo">Export .txt ↓</button
+                    ><button
+                      id="replay-demo"
+                      aria-label="Replay recording demo"
+                    >
+                      ↺
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <span class="demo-footnote"
+            >An illustrative preview. Try the record button.</span
+          >
+        </div>
+      </section>
+      <section class="intro wrap" id="workflow">
+        <div class="section-heading">
+          <h2>From “let’s talk”<br />to <em>“got it.”</em></h2>
+          <p>
+            Your recording is the beginning.<br />The next step should feel
+            natural.
+          </p>
+        </div>
+        <div class="flow">
+          <article>
+            <div class="flow-visual capture">
+              <div class="sound-bars" aria-hidden="true"></div>
+            </div>
+            <h3>Be in the conversation.</h3>
+            <p>
+              Capture your microphone, computer audio, or both. Pause when you
+              need a moment. Pick up right where you left off.
+            </p>
+          </article>
+          <article>
+            <div class="flow-visual words" aria-hidden="true">
+              <span>So here's the idea<span class="typing-caret"></span></span>
+              <div class="word-lines"><i></i><i></i></div>
+            </div>
+            <h3>Find the words.</h3>
+            <p>
+              Go straight from recording to transcription, or bring in a file.
+              Choose your Whisper model and let your Mac do the work.
+            </p>
+          </article>
+          <article>
+            <div class="flow-visual files" aria-hidden="true">
+              <span class="file-sheet back">SRT</span
+              ><span class="file-sheet front">Aa<span>meeting.txt</span></span>
+            </div>
+            <h3>Take it from here.</h3>
+            <p>
+              Export the transcript, revisit it in your Library, or keep the
+              recording as a draft. You choose what happens next.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section
+        class="use-cases wrap"
+        id="use-cases"
+        aria-labelledby="use-cases-heading"
+      >
+        <div class="case-heading">
+          <h2 id="use-cases-heading">
+            Good words.<br /><em>So many places to take them.</em>
+          </h2>
+          <p>From the lecture hall to your next idea.</p>
+        </div>
+        <div
+          class="case-tabs"
+          role="tablist"
+          aria-label="Explore Wordvale use cases"
+        >
+          <button
+            role="tab"
+            id="tab-lectures"
+            aria-controls="case-lectures"
+            aria-selected="true"
+            tabindex="0"
+          >
+            Lectures
+          </button>
+          <button
+            role="tab"
+            id="tab-meetings"
+            aria-controls="case-meetings"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Meetings
+          </button>
+          <button
+            role="tab"
+            id="tab-voice"
+            aria-controls="case-voice"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Your voice
+          </button>
+          <button
+            role="tab"
+            id="tab-subtitles"
+            aria-controls="case-subtitles"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Video subtitles
+          </button>
+        </div>
+        <div
+          class="case-panel"
+          role="tabpanel"
+          id="case-lectures"
+          aria-labelledby="tab-lectures"
+          tabindex="0"
+        >
+          <div
+            class="case-art lecture-art"
+            aria-label="Illustrative lecture transcript"
+          >
+            <div class="lecture-paper">
+              <span class="paper-meta"
+                >Tuesday’s lecture <span>Transcript</span></span
+              >
+              <h3>Make room for<br />the bigger picture.</h3>
+              <p>
+                <span class="case-time">12:34</span> The important thing is how
+                these ideas connect.
+              </p>
+              <p>
+                <span class="case-time">12:48</span>
+                <mark>Understanding the relationship</mark> is what helps us see
+                the whole picture.
+              </p>
+              <div class="paper-rule"></div>
+              <span class="paper-bottom">Something to come back to.</span>
+            </div>
+          </div>
+          <div class="case-copy">
+            <h3>
+              Be there for the lesson.<br /><em>Have the words for later.</em>
+            </h3>
+            <p>
+              Follow the explanation without trying to write every sentence.
+              Turn a recorded lecture into text you can revisit alongside your
+              notes.
+            </p>
+            <div class="case-takeaway">
+              <span>A recording you can read.</span>
+              <p>
+                Keep the transcript in your Library, or export it for your study
+                materials.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div
+          class="case-panel"
+          role="tabpanel"
+          id="case-meetings"
+          aria-labelledby="tab-meetings"
+          tabindex="0"
+          hidden
+        >
+          <div
+            class="case-art meeting-art"
+            aria-label="Illustrative meeting recording and transcript"
+          >
+            <div class="meeting-capture">
+              <div class="meeting-sources">
+                <span><i></i>Microphone</span><span><i></i>Computer audio</span>
+              </div>
+              <svg viewBox="0 0 240 150" aria-hidden="true">
+                <path
+                  d="M24 79 C51 79 31 37 57 37 S68 120 95 120 S102 20 128 20 S138 108 162 108 S173 66 204 66"
+                />
+              </svg>
+              <div class="meeting-excerpt">
+                <span class="case-time">08:21</span>
+                <p>“Let’s come back to that idea in the next session.”</p>
+              </div>
+              <span class="paper-bottom"
+                >The conversation, ready to revisit.</span
+              >
+            </div>
+          </div>
+          <div class="case-copy">
+            <h3>
+              Stay in the conversation.<br /><em
+                >Catch up on the details later.</em
+              >
+            </h3>
+            <p>
+              Record your microphone and computer audio together. Go straight to
+              transcription when you’re done, then revisit what was said as you
+              write your follow-up.
+            </p>
+            <div class="case-takeaway">
+              <span>Fewer steps between tools.</span>
+              <p>Capture, review, and transcribe in the same workspace.</p>
+            </div>
+          </div>
+        </div>
+        <div
+          class="case-panel"
+          role="tabpanel"
+          id="case-voice"
+          aria-labelledby="tab-voice"
+          tabindex="0"
+          hidden
+        >
+          <div
+            class="case-art voice-art"
+            aria-label="Illustrative voice note becoming a draft"
+          >
+            <div class="voice-note">
+              <svg viewBox="0 0 240 150" aria-hidden="true">
+                <path
+                  d="M24 79 C51 79 31 37 57 37 S68 120 95 120 S102 20 128 20 S138 108 162 108 S173 66 204 66"
+                />
+              </svg>
+              <p>“Okay, here’s the idea…”</p>
+              <div class="voice-to-text"></div>
+              <span
+                >A voice note today.<br /><em>A first draft tomorrow.</em></span
+              >
+            </div>
+          </div>
+          <div class="case-copy">
+            <h3>
+              Say it while it’s fresh.<br /><em>Shape it when you’re ready.</em>
+            </h3>
+            <p>
+              Talk through a thought before it disappears. Turn your voice
+              recording into text, then take those words into a draft, a plan,
+              or whatever comes next.
+            </p>
+            <div class="case-takeaway">
+              <span>Keep the idea moving.</span>
+              <p>
+                Leave the recording as a draft, save it, or go straight to
+                transcription.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div
+          class="case-panel"
+          role="tabpanel"
+          id="case-subtitles"
+          aria-labelledby="tab-subtitles"
+          tabindex="0"
+          hidden
+        >
+          <div
+            class="case-art subtitle-art"
+            aria-label="Illustrative subtitle preview"
+          >
+            <div class="caption-frame">
+              <span class="video-time">00:12 / 01:48</span>
+              <div class="video-title">
+                A story<br />worth <em>sharing.</em>
+              </div>
+              <span class="caption-line"
+                >And that’s where the story begins.</span
+              >
+              <div class="video-timeline"><i></i></div>
+            </div>
+            <span class="subtitle-file"
+              >your-video.srt <span>Ready for your video editor</span></span
+            >
+          </div>
+          <div class="case-copy">
+            <h3>
+              Give your video a voice.<br /><em>Even with the sound off.</em>
+            </h3>
+            <p>
+              Bring in a video, transcribe the speech, and export SRT subtitles
+              for your video editor. Give viewers another way to follow along
+              without typing every line yourself.
+            </p>
+            <div class="case-takeaway">
+              <span>From spoken words to captions.</span>
+              <p>
+                Use SRT for subtitles, or karaoke-style ASS when reliable word
+                timestamps are available.
+              </p>
+            </div>
+          </div>
+        </div>
+        <p class="case-preview-note">
+          Illustrative previews. Your recordings, your words.
+        </p>
+      </section>
+      <section class="appearance" id="appearance">
+        <div class="appearance-inner wrap">
+          <div>
+            <h2>A little more<br /><em>you.</em></h2>
+            <p>Same calm workspace.<br />A different kind of atmosphere.</p>
+            <div
+              class="theme-picker"
+              role="group"
+              aria-label="Preview website theme"
+            >
+              <button
+                class="swatch reading selected"
+                data-theme="reading"
+                aria-pressed="true"
+              >
+                <i></i><span>Reading</span></button
+              ><button
+                class="swatch paper"
+                data-theme="paper"
+                aria-pressed="false"
+              >
+                <i></i><span>Paper</span></button
+              ><button
+                class="swatch dusk"
+                data-theme="dusk"
+                aria-pressed="false"
+              >
+                <i></i><span>Dusk</span></button
+              ><button
+                class="swatch midnight"
+                data-theme="midnight"
+                aria-pressed="false"
+              >
+                <i></i><span>Midnight</span>
+              </button>
+            </div>
+            <p class="theme-note">Pick a color. Feel the whole page change.</p>
+          </div>
+          <div class="theme-art" aria-hidden="true">
+            <svg viewBox="0 0 420 250">
+              <path
+                d="M20 130 C90 130 30 48 100 48 S105 220 175 220 S180 20 250 20 S250 198 310 198 S323 110 400 110"
+              />
+            </svg>
+            <div class="art-line"></div>
+            <span>Room to think.</span>
+          </div>
+        </div>
+      </section>
+      <section class="details wrap">
+        <div class="details-title">
+          <h2>Thought through.<br />Not overdone.</h2>
+          <p>Useful where it counts.</p>
+        </div>
+        <div class="detail-list">
+          <details open>
+            <summary>Whisper, at your pace.<span>+</span></summary>
+            <p>
+              Compare models for speed, accuracy, and storage. Download one once
+              and use it offline afterward. Transcribe in the original language
+              or translate to English with a supported model.
+            </p>
+          </details>
+          <details>
+            <summary>One file. Or a whole afternoon.<span>+</span></summary>
+            <p>
+              Drop in audio and video files, queue several recordings, and
+              follow their progress. Adjust language, model, and transcription
+              options to suit the work.
+            </p>
+          </details>
+          <details>
+            <summary>A Library you choose to build.<span>+</span></summary>
+            <p>
+              Save recordings and transcripts when you want to keep them. Search
+              your collection, relink audio, or import an existing transcript.
+              Saving a recording to Library is always your choice.
+            </p>
+          </details>
+          <details>
+            <summary>
+              The right words. In the right format.<span>+</span>
+            </summary>
+            <p>
+              Export plain text, timed text, SRT subtitles, or JSON. Karaoke ASS
+              export is available when reliable word timestamps are present.
+            </p>
+          </details>
+          <details>
+            <summary>Audio stays close to home.<span>+</span></summary>
+            <p>
+              Transcription runs locally on your Mac. Sign-in, model downloads,
+              and update checks need an internet connection. Your local Library
+              is shared by accounts using the same Mac user profile.
+            </p>
+          </details>
+        </div>
+      </section>
+      <section class="download-section" id="download">
+        <div class="wrap download-inner">
+          <svg class="download-mark" viewBox="0 0 48 48" aria-hidden="true">
+            <path
+              d="M4 25c5 0 1-15 7-15s1 30 7 30 1-36 7-36 1 30 7 30 1-14 8-14"
+            />
+          </svg>
+          <h2>Your next conversation<br />has somewhere to go.</h2>
+          <a
+            class="button primary"
+            href="https://github.com/arinaggarwal1/Wordvale/releases/latest/download/Wordvale-macOS-arm64.dmg"
+            >Download Wordvale ↓</a
+          >
+          <p>
+            For Apple silicon Macs ·
+            <a
+              data-release-stage
+              href="https://github.com/arinaggarwal1/Wordvale/releases/latest"
+              >Latest release</a
+            >
+          </p>
+          <details class="install-note">
+            <summary>Good to know before you install</summary>
+            <p>
+              This alpha may have bugs. Meeting recording requires macOS 13 or
+              later and microphone or screen recording permissions for the
+              sources you use. The app is currently unsigned and unnotarized.
+              See the GitHub release for installation details.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap">
+      <a href="#" class="footer-brand">wordvale</a
+      ><span>Made for the way ideas happen.</span>
+      <div>
+        <a href="https://github.com/arinaggarwal1/Wordvale">Source code ↗</a
+        ><a href="https://buymeacoffee.com/Arin11a">Buy me a coffee ↗</a>
+      </div>
+    </footer>
+    <div class="sr-only" role="status" id="announcement"></div>
+  </body>
+</html>

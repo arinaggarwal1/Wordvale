@@ -54,3 +54,6 @@ yarn-error.log*
 Thumbs.db
 *.swp
 *.swo
+
+# Vercel local project links
+.vercel/

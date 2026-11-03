@@ -2,7 +2,7 @@
 
 <p align="center"><strong>Offline transcription, made at home on your Mac.</strong><br>Turn recordings into readable, searchable text without sending your audio to a transcription service.</p>
 
-<p align="center"><a href="#get-started">Get started</a> · <a href="#what-you-can-do">Features</a> · <a href="#run-from-source">Run from source</a> · <a href="#github-releases">Releases</a> · <a href="https://buymeacoffee.com/Arin11a">Buy me a coffee</a></p>
+<p align="center"><a href="https://wordvale-seven.vercel.app">Website</a> · <a href="#get-started">Get started</a> · <a href="#what-you-can-do">Features</a> · <a href="#run-from-source">Run from source</a> · <a href="#github-releases">Releases</a> · <a href="https://buymeacoffee.com/Arin11a">Buy me a coffee</a></p>
 
 <p align="center"><a href="https://github.com/arinaggarwal1/Wordvale/releases/tag/v0.3.0-alpha.1"><strong>Download Wordvale 0.3.0-alpha.1 for macOS (Apple silicon)</strong></a></p>
 
@@ -49,6 +49,8 @@ npm run dist:mac
 ```
 
 The script builds the app and copies the DMG to `~/Downloads`. For frontend-only work, `npm run dev` runs the interface in a browser with a mock backend; use the Tauri command for real transcription.
+
+Visit the [Wordvale website](https://wordvale-seven.vercel.app) for features, use cases, and the latest download. The [website source and deployment instructions](website/README.md) live in `website/` and run without a build step.
 
 ## Find your way around
 
