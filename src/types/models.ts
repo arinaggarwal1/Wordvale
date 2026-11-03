@@ -60,6 +60,19 @@ export interface QueueItem {
     addedAt: number;
     savedViews?: TranscriptView[];
     saveError?: string;
+    libraryId?: string;
+}
+
+export interface LibraryItem {
+    id: string;
+    name: string;
+    created_at: number;
+    updated_at: number;
+    audio_path: string | null;
+    audio_mode: "link" | "copy" | null;
+    audio_name: string | null;
+    audio_available: boolean;
+    transcript: TranscriptionResult | null;
 }
 
 export interface TranscriptionSegment {

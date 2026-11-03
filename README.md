@@ -353,6 +353,14 @@ Open **Manage models** in the transcription view to compare the available models
 
 Large v3 Turbo is intended for transcription and is not trained for speech translation. Choose a model with translation support when using Translate to English.
 
+## Library
+
+Open **Library** from the transcription sidebar to keep recordings and transcripts between sessions. Save one or more queue items to the library, add a recording, or import a TXT, SRT, or Wordvale JSON transcript. Library item names are separate from the names of original files. You can attach or remove a recording or transcript, relink missing recordings, and export saved transcripts.
+
+When saving audio, **Link to original** leaves the recording in place and requires that the file remain available. **Copy into library** stores a separate managed copy. Removing a linked recording never deletes the original; removing a managed recording deletes its library copy. The local database and any managed recordings are stored under `~/Library/Application Support/Wordvale/library`.
+
+Use **Add to queue** on a library recording to transcribe it again. A successful run replaces the item's saved transcript, including any previous translation; a cancelled or failed run leaves the existing transcript intact. Clearing the queue does not remove library items.
+
 ## GitHub Releases
 
 The workflow at `.github/workflows/release-dmg.yml` builds an Apple silicon macOS DMG when a version tag is pushed. It publishes prerelease tags such as `v0.1.0-alpha` as GitHub prereleases. Set the same version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` before tagging.

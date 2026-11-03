@@ -15,6 +15,9 @@ import {
     Sparkles,
     RotateCcw,
     Play,
+    Headphones,
+    Download,
+    LibraryBig,
 } from "lucide-react";
 import type { QueueItem, QueueItemStatus } from "../types/models";
 import { estimateTime, formatDuration } from "../constants";
@@ -23,6 +26,10 @@ interface QueuePanelProps {
     queue: QueueItem[];
     onRemove: (id: string) => void;
     onRun: (id: string) => void;
+    onListen: (id: string) => void;
+    onBatchExport: () => void;
+    onSaveLibrary: (id: string) => void;
+    onBatchSaveLibrary: () => void;
     canRun: boolean;
     onReorder: (fromIndex: number, toIndex: number) => void;
     currentModel: string | null;
@@ -61,6 +68,10 @@ export default function QueuePanel({
     queue,
     onRemove,
     onRun,
+    onListen,
+    onBatchExport,
+    onSaveLibrary,
+    onBatchSaveLibrary,
     canRun,
     onReorder,
     currentModel,
@@ -125,7 +136,7 @@ export default function QueuePanel({
                     <div className={`mt-0.5 ${status.color}`}>{status.icon}</div>
 
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                                 <p className={`text-sm font-medium truncate ${isSelected ? "text-accent-200" : "text-surface-100"}`}>
                                     {item.fileName}
@@ -184,6 +195,15 @@ export default function QueuePanel({
                                     </button>
                                 )}
                                 <button
+                                    onClick={() => onListen(item.id)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-surface-400 hover:bg-surface-800/70 hover:text-surface-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400"
+                                    aria-label={`Listen to ${item.fileName}`}
+                                    title="Listen to recording"
+                                >
+                                    <Headphones className="h-3.5 w-3.5" /> Listen
+                                </button>
+                                <button onClick={() => onSaveLibrary(item.id)} aria-label={`Save ${item.fileName} to library`} title={item.libraryId ? "Already linked to library" : isProcessing ? "Wait for transcription to finish" : "Save to library"} disabled={!!item.libraryId || isProcessing} className="rounded-lg p-1.5 text-surface-500 hover:bg-surface-800/70 hover:text-surface-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400 disabled:opacity-40"><LibraryBig className="h-4 w-4" /></button>
+                                <button
                                     onClick={() => onRemove(item.id)}
                                     disabled={disableRemove}
                                     className="p-1.5 rounded-lg text-surface-500 hover:text-danger-300 hover:bg-danger-500/10 transition-colors disabled:opacity-30"
@@ -235,6 +255,7 @@ export default function QueuePanel({
                         </p>
                     </div>
 
+                    {completedCount > 0 && <><button onClick={onBatchSaveLibrary} className="btn-ghost shrink-0 border border-surface-700/50 bg-surface-800/30 text-xs"><LibraryBig className="h-4 w-4" /> Save to library</button><button onClick={onBatchExport} className="btn-ghost shrink-0 border border-surface-700/50 bg-surface-800/30 text-xs" aria-label="Export completed transcripts"><Download className="h-4 w-4" /> Export</button></>}
                     <div className="rounded-lg border border-surface-800/60 bg-surface-900/50 px-3 py-2 text-right shrink-0">
                         <p className="text-[10px] uppercase tracking-wider text-surface-500">Remaining</p>
                         <p className="mt-0.5 text-sm font-semibold text-surface-100">

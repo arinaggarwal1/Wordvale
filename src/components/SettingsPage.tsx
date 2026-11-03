@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, ExternalLink, RefreshCw, RotateCw } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, RefreshCw, RotateCw } from "lucide-react";
 import { open } from "@tauri-apps/api/shell";
 import { invoke } from "@tauri-apps/api/tauri";
 import { exit } from "@tauri-apps/api/process";
@@ -16,6 +16,7 @@ interface UpdateStatus {
     can_install: boolean;
 }
 interface Props {
+    onBack: () => void;
     logs: BackendDebugEntry[];
     isBackendReady: boolean;
     isUsingMockBackend: boolean;
@@ -24,7 +25,7 @@ interface Props {
     updateCommand: (command: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }
 
-export default function SettingsPage({ updateCommand, updateBlocked, ...props }: Props) {
+export default function SettingsPage({ onBack, updateCommand, updateBlocked, ...props }: Props) {
     const [update, setUpdate] = useState<UpdateStatus>({ status: "idle", current_version: version, latest_version: null, message: "", progress: 0, can_install: false });
     const [busy, setBusy] = useState(false);
     const [connectionError, setConnectionError] = useState("");
@@ -69,12 +70,14 @@ export default function SettingsPage({ updateCommand, updateBlocked, ...props }:
         } catch (error) { setConnectionError(`Could not restart: ${String(error)}`); }
     }
     const working = busy || ["checking", "downloading", "installing"].includes(update.status);
-    return <main className="flex-1 min-w-0 overflow-y-auto p-8">
-        <div className="max-w-3xl mx-auto">
-            <h2 className="text-2xl font-bold text-surface-100">Settings</h2>
-            <p className="text-sm text-surface-400 mt-1">Manage updates and troubleshoot the backend.</p>
+    return <main className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-surface-950 p-6 lg:p-8">
+        <div className="mx-auto max-w-6xl">
+            <button onClick={onBack} className="page-back"><ArrowLeft className="h-4 w-4" /> Back to transcription</button>
+        <div className="w-full">
+            <h2 className="text-3xl font-bold text-surface-100">Settings</h2>
+            <p className="mt-2 text-sm leading-relaxed text-surface-400">Manage updates and troubleshoot the backend.</p>
             <section className="card p-5 mt-6">
-                <h3 className="text-sm font-semibold text-surface-100">Updates</h3>
+                <h3 className="text-base font-semibold text-surface-100">Updates</h3>
                 <p className="text-xs text-surface-400 mt-2">Current version: {version}{update.latest_version && update.latest_version !== version ? ` · Latest: ${update.latest_version}` : ""}</p>
                 <p className="text-xs text-surface-400 mt-1">Updates are verified before installation. The app will restart to finish.</p>
                 {!isDesktop && <p className="text-xs text-surface-400 mt-2">Open the desktop app to check for updates.</p>}
@@ -92,6 +95,7 @@ export default function SettingsPage({ updateCommand, updateBlocked, ...props }:
                 <p role="status" className="text-xs text-surface-300 mt-3">{connectionError || update.message}</p>
             </section>
             <BackendDebugPanel {...props} />
+        </div>
         </div>
     </main>;
 }

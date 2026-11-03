@@ -49,13 +49,12 @@ export default {
             },
             fontFamily: {
                 sans: [
-                    "Inter",
-                    "system-ui",
                     "-apple-system",
                     "BlinkMacSystemFont",
+                    "system-ui",
                     "sans-serif",
                 ],
-                mono: ["JetBrains Mono", "Fira Code", "monospace"],
+                mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
             },
             animation: {
                 "fade-in": "fadeIn 0.3s ease-out",

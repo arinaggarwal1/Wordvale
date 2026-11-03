@@ -37,10 +37,11 @@ export default function BackendDebugPanel({
     }
 
     return (
-        <div className="card p-4 mt-4">
+        <div className="card p-5 mt-4">
             <button
                 onClick={() => setIsOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between"
+                aria-expanded={isOpen}
+                className="flex w-full items-center justify-between rounded text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400"
             >
                 <div className="flex items-center gap-2">
                     <Bug className="w-4 h-4 text-surface-400" />

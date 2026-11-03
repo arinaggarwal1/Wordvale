@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { save } from "@tauri-apps/api/dialog";
 import { writeTextFile } from "@tauri-apps/api/fs";
+import { formatTranscript } from "../lib/transcriptExport";
 import type {
     TranscriptionResult,
     ExportFormat,
@@ -96,10 +97,8 @@ export default function ExportPanel({
         }
     }, [result, selectedIdx, hasWordTimestamps]);
 
-    if (!result || !selectedTranscript) return null;
-
     const handleExport = async () => {
-        if (isSaving) return;
+        if (isSaving || !result || !selectedTranscript) return;
         setIsSaving(true);
         setSaveError(null);
 
@@ -108,55 +107,11 @@ export default function ExportPanel({
             if (fmt.requiresWordTimestamps && !hasWordTimestamps) {
                 return;
             }
-            let content = "";
-            let filename = result.file.replace(/\.[^.]+$/, "");
-            if (showTranscriptViewSelector) {
-                filename += selectedTranscriptView === "english" ? "_english" : "_original";
-            }
-
-            // Prepare content
-            switch (fmt.id) {
-                case "txt": {
-                    if (fmt.timestamps) {
-                        content = selectedTranscript.segments
-                            .map((seg) => {
-                                const ts = `[${formatTS(seg.start)} - ${formatTS(seg.end)}]`;
-                                return `${ts} ${seg.text.trim()}`;
-                            })
-                            .join("\n\n");
-                    } else {
-                        content = selectedTranscript.text;
-                    }
-                    break;
-                }
-                case "srt":
-                    content = selectedTranscript.srt;
-                    break;
-                case "ass":
-                    content = selectedTranscript.ass || "";
-                    break;
-                case "json":
-                    content = JSON.stringify(
-                        {
-                            file: result.file,
-                            language: selectedTranscript.language,
-                            view: showTranscriptViewSelector ? selectedTranscriptView : "original",
-                            task: result.task || "transcribe",
-                            text: selectedTranscript.text,
-                            srt: selectedTranscript.srt,
-                            ass: selectedTranscript.ass,
-                            duration_seconds: result.duration_seconds,
-                            segments: selectedTranscript.segments,
-                        },
-                        null,
-                        2
-                    );
-                    break;
-            }
+            const { filename, content } = formatTranscript(result, selectedTranscriptView, fmt.id === "txt" ? (fmt.timestamps ? "timed" : "text") : fmt.id);
 
             // Open Save Dialog
             const path = await save({
-                defaultPath: `${filename}${fmt.ext}`,
+                defaultPath: filename,
                 filters: [{
                     name: fmt.label,
                     extensions: [fmt.ext.replace(".", "")]
@@ -192,7 +147,7 @@ export default function ExportPanel({
             {/* Format Selection Grid */}
             <div className="grid grid-cols-2 gap-2 mb-3" aria-label="Export format">
                 {formats.map((fmt, i) => {
-                    const disabled = Boolean(fmt.requiresWordTimestamps && !hasWordTimestamps);
+                    const disabled = !result || Boolean(fmt.requiresWordTimestamps && !hasWordTimestamps) || Boolean((fmt.id === "srt" || fmt.timestamps) && !selectedTranscript?.segments.length);
                     const selected = selectedIdx === i;
 
                     return (
@@ -205,7 +160,7 @@ export default function ExportPanel({
                                 ${fmt.id === "ass" ? "col-span-2" : ""}
                                 ${selected ? "border-accent-500/30 bg-accent-500/20 text-accent-300" : "border-transparent bg-surface-800/50 text-surface-300 hover:bg-surface-800 hover:text-surface-100"}
                                 ${disabled ? "cursor-not-allowed opacity-60 hover:bg-surface-800/50 hover:text-surface-300" : ""}`}
-                            title={disabled ? "Karaoke ASS requires word timestamps with usable timing for every word." : fmt.label}
+                            title={!result ? "Select a completed transcript first." : disabled ? (fmt.id === "ass" ? "Karaoke ASS requires word timestamps with usable timing for every word." : "This transcript has no segment timestamps.") : fmt.label}
                         >
                             <span className="shrink-0">{fmt.icon}</span>
                             <span className="whitespace-nowrap">{fmt.label}</span>
@@ -217,15 +172,15 @@ export default function ExportPanel({
 
             {saveError && <p role="alert" className="text-xs text-danger-400 mb-3 break-words">{saveError}</p>}
 
-            {!hasWordTimestamps && <p className="mb-3 text-[11px] leading-relaxed text-surface-500">{hasUnreliableTiming ? "Karaoke ASS is unavailable because some words have no reliable timing." : "Enable word timestamps before transcribing to use karaoke ASS."}</p>}
+            {!result ? <p className="mb-3 text-[11px] leading-relaxed text-surface-500">Select a completed transcript to export.</p> : !hasWordTimestamps && <p className="mb-3 text-[11px] leading-relaxed text-surface-500">{hasUnreliableTiming ? "Karaoke ASS is unavailable because some words have no reliable timing." : "Enable word timestamps before transcribing to use karaoke ASS."}</p>}
 
             {/* Main Save Button */}
             <button
                 onClick={handleExport}
-                disabled={isSaving}
+                disabled={isSaving || !result}
                 className={`
                     w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium
-                    transition-all duration-200
+                    transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40
                     ${exported
                         ? "bg-success-500/20 text-success-300 border border-success-500/30"
                         : "bg-surface-100 text-surface-900 hover:bg-white active:scale-[0.98]"
@@ -246,10 +201,4 @@ export default function ExportPanel({
             </button>
         </div>
     );
-}
-
-function formatTS(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${String(s).padStart(2, "0")}`;
 }

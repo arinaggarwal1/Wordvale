@@ -44,7 +44,7 @@ body,
 body {
   background: var(--app-bg);
   color: var(--text-primary);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -101,6 +101,22 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2
            text-surface-400 transition-all duration-200
            hover:bg-surface-800/60 hover:text-surface-200;
+  }
+
+  .page-back {
+    @apply btn-ghost mb-6 border border-surface-700/50 bg-surface-900/40 text-xs
+           hover:border-surface-600 focus-visible:outline focus-visible:outline-2
+           focus-visible:outline-offset-2 focus-visible:outline-accent-400;
+  }
+
+  .range-control {
+    @apply h-1.5 cursor-pointer appearance-none rounded-full bg-surface-700
+           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4
+           focus-visible:outline-accent-400 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .range-control::-webkit-slider-thumb {
+    @apply h-3.5 w-3.5 appearance-none rounded-full bg-accent-400 shadow-sm;
   }
 
   .input-field {
@@ -182,7 +198,7 @@ body {
 
 /* ─── Radix UI Overrides ─── */
 [data-radix-popper-content-wrapper] {
-  z-index: 50 !important;
+  z-index: 80 !important;
 }
 
 /* Select content */

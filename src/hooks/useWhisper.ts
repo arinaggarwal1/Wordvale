@@ -56,11 +56,12 @@ interface UseWhisperReturn {
         task: string
     ) => Promise<TranscriptionResult>;
     cancelTranscription: () => Promise<void>;
-    addToQueue: (files: { path: string; size: number }[]) => void;
+    addToQueue: (files: { path: string; size: number; libraryId?: string; fileName?: string }[]) => void;
     removeFromQueue: (id: string) => void;
     reorderQueue: (fromIndex: number, toIndex: number) => void;
     retryQueueItem: (id: string) => void;
     markSaved: (id: string, view: "original" | "english") => void;
+    linkQueueToLibrary: (id: string, libraryId: string, result?: TranscriptionResult) => void;
     processQueue: (settings: AdvancedSettings, language: string, task: string, outputDir?: string, onlyId?: string) => Promise<void>;
     updateCommand: (command: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
     clearError: () => void;
@@ -488,9 +489,9 @@ export function useWhisper(): UseWhisperReturn {
         }
     }
 
-    function addToQueue(files: { path: string; size: number }[]) {
+    function addToQueue(files: { path: string; size: number; libraryId?: string; fileName?: string }[]) {
         const newItems: QueueItem[] = files.map((file) => {
-            const fileName = file.path.split("/").pop() || file.path;
+            const fileName = file.fileName || file.path.split("/").pop() || file.path;
             const format = fileName.split(".").pop() || "unknown";
             const fileSizeMb = parseFloat((file.size / (1024 * 1024)).toFixed(2));
 
@@ -503,6 +504,7 @@ export function useWhisper(): UseWhisperReturn {
                 status: "pending" as QueueItemStatus,
                 progress: 0,
                 addedAt: Date.now(),
+                libraryId: file.libraryId,
             };
         });
         setQueue((prev) => [...prev, ...newItems]);
@@ -523,6 +525,14 @@ export function useWhisper(): UseWhisperReturn {
             const allSaved = savedViews.includes("original") && (!item.result?.english || savedViews.includes("english"));
             return { ...item, savedViews, saveError: allSaved ? undefined : item.saveError };
         }));
+    }
+
+    function linkQueueToLibrary(id: string, libraryId: string, result?: TranscriptionResult) {
+        setQueue((prev) => prev.map((item) => item.id === id ? {
+            ...item,
+            libraryId,
+            savedViews: result && item.result === result ? (result.original && result.english ? ["original", "english"] : ["original"]) : item.savedViews,
+        } : item));
     }
 
     function reorderQueue(fromIndex: number, toIndex: number) {
@@ -592,12 +602,23 @@ export function useWhisper(): UseWhisperReturn {
                 });
 
                 try {
-                    const result = await transcribeFile(nextItem.filePath, settings, language, task);
+                    const transcribed = await transcribeFile(nextItem.filePath, settings, language, task);
+                    const result = nextItem.libraryId ? { ...transcribed, file: nextItem.fileName } : transcribed;
                     let savedViews: ("original" | "english")[] = [];
                     let saveError: string | undefined;
+                    if (nextItem.libraryId) {
+                        try {
+                            await sendCommand("library_set_transcript", { id: nextItem.libraryId, transcript: result });
+                            savedViews = result.original && result.english ? ["original", "english"] : ["original"];
+                            window.dispatchEvent(new Event("wordvale-library-changed"));
+                        } catch (err) {
+                            saveError = `Library update failed: ${String(err)}. Save this transcript manually.`;
+                            setError(saveError);
+                        }
+                    }
                     if (outputDir) {
                         try {
-                            savedViews = await autoSaveResult(outputDir, result);
+                            savedViews = Array.from(new Set([...savedViews, ...await autoSaveResult(outputDir, result)]));
                         } catch (err) {
                             saveError = `Auto-save failed: ${String(err)}. Save the transcript manually.`;
                             setError(saveError);
@@ -668,6 +689,7 @@ export function useWhisper(): UseWhisperReturn {
         reorderQueue,
         retryQueueItem,
         markSaved,
+        linkQueueToLibrary,
         processQueue,
         updateCommand: sendCommand,
         clearError,

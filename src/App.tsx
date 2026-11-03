@@ -17,15 +17,15 @@ import {
     AlertTriangle,
     X,
     Settings,
-    ArrowLeft,
     ArrowRight,
     HardDrive,
+    LibraryBig,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/tauri";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useWhisper } from "./hooks/useWhisper";
 import { DEFAULT_SETTINGS } from "./types/models";
-import type { AdvancedSettings, TranscriptView } from "./types/models";
+import type { AdvancedSettings, LibraryItem, TranscriptView } from "./types/models";
 import { estimateTime, formatDuration } from "./constants";
 
 import FileDropZone from "./components/FileDropZone";
@@ -36,12 +36,21 @@ import AdvancedSettingsPanel from "./components/AdvancedSettingsPanel";
 import QueuePanel from "./components/QueuePanel";
 import ExportPanel from "./components/ExportPanel";
 import ModelsPage from "./components/ModelsPage";
+import AudioPlayer from "./components/AudioPlayer";
+import BatchExportDialog from "./components/BatchExportDialog";
+import LibraryPage from "./components/LibraryPage";
+import SaveLibraryDialog from "./components/SaveLibraryDialog";
 
 import SettingsPage from "./components/SettingsPage";
 
 export default function App() {
     const [showSettings, setShowSettings] = useState(false);
     const [showModels, setShowModels] = useState(false);
+    const [showLibrary, setShowLibrary] = useState(false);
+    const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+    const [libraryLoading, setLibraryLoading] = useState(false);
+    const [libraryError, setLibraryError] = useState<string | null>(null);
+    const [librarySaveIds, setLibrarySaveIds] = useState<string[] | null>(null);
     const [pendingModelDownload, setPendingModelDownload] = useState<string | null>(null);
 
     const {
@@ -70,6 +79,7 @@ export default function App() {
         removeFromQueue,
         reorderQueue,
         markSaved,
+        linkQueueToLibrary,
         clearError,
         updateCommand,
         getModelStorage,
@@ -81,6 +91,8 @@ export default function App() {
     const [selectedLanguage, setSelectedLanguage] = useState("auto");
     const [selectedTask, setSelectedTask] = useState("transcribe");
     const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
+    const [listeningId, setListeningId] = useState<string | null>(null);
+    const [showBatchExport, setShowBatchExport] = useState(false);
     const [selectedTranscriptView, setSelectedTranscriptView] = useState<TranscriptView>("original");
     const [elapsedTime, setElapsedTime] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -94,6 +106,21 @@ export default function App() {
     const hasUnsaved = (items: typeof queue) => items.some((item) => item.result &&
         (!(item.savedViews || []).includes("original") ||
          (item.result.english && !(item.savedViews || []).includes("english"))));
+
+    const refreshLibrary = useCallback(async () => {
+        if (!isBackendReady || isUsingMockBackend) return;
+        setLibraryLoading(true); setLibraryError(null);
+        try { const response = await updateCommand("library_list"); setLibraryItems(response.items as unknown as LibraryItem[]); }
+        catch (error) { setLibraryError(error instanceof Error ? error.message : String(error)); }
+        finally { setLibraryLoading(false); }
+    }, [isBackendReady, isUsingMockBackend, updateCommand]);
+
+    useEffect(() => {
+        if (showLibrary) void refreshLibrary();
+        const refresh = () => { void refreshLibrary(); };
+        window.addEventListener("wordvale-library-changed", refresh);
+        return () => window.removeEventListener("wordvale-library-changed", refresh);
+    }, [showLibrary, refreshLibrary]);
 
     useEffect(() => {
         const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -154,6 +181,18 @@ export default function App() {
 
     // Keyboard shortcuts
     useEffect(() => {
+        function handleEscape(event: KeyboardEvent) {
+            if (event.key !== "Escape" || event.defaultPrevented || (!showSettings && !showModels && !showLibrary)) return;
+            if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="listbox"], [role="menu"]')) return;
+            setShowSettings(false);
+            setShowModels(false);
+            setShowLibrary(false);
+        }
+        window.addEventListener("keydown", handleEscape);
+        return () => window.removeEventListener("keydown", handleEscape);
+    }, [showSettings, showModels, showLibrary]);
+
+    useEffect(() => {
         function handleKeyDown(e: KeyboardEvent) {
             const meta = e.metaKey || e.ctrlKey;
 
@@ -176,7 +215,7 @@ export default function App() {
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [queue, currentModel, isTranscribing, settings, selectedLanguage, selectedTask]);
+    }, [queue, currentModel, isTranscribing, settings, selectedLanguage, selectedTask, librarySaveIds]);
 
     // Open file dialog using Tauri's native dialog
     const openFileDialog = useCallback(async () => {
@@ -213,7 +252,7 @@ export default function App() {
 
     // Start transcription
     const handleStart = useCallback(async (onlyId?: string) => {
-        if (startInProgress.current) return;
+        if (startInProgress.current || librarySaveIds !== null) return;
         if (isTranscribing || isModelLoading || !modelStorage || queue.length === 0 || (currentModel?.endsWith(".en") && selectedLanguage !== "en") || (selectedTask === "translate" && currentModel && models.find((m) => m.name === currentModel)?.translation_support === false)) return;
         if (onlyId ? !queue.some((item) => item.id === onlyId && item.status !== "processing") : !queue.some((item) => item.status === "pending")) return;
 
@@ -266,6 +305,7 @@ export default function App() {
         settings,
         selectedLanguage,
         selectedTask,
+        librarySaveIds,
     ]);
 
     const handleRunFile = (id: string) => {
@@ -302,6 +342,7 @@ export default function App() {
     // while transcribing, follow the live result unless the user explicitly selects another item.
     // after transcription, require an explicit selection so the panel does not imply a file is active.
     const selectedQueueItem = selectedQueueId ? queue.find((q) => q.id === selectedQueueId) : null;
+    const listeningItem = listeningId ? queue.find((item) => item.id === listeningId) : null;
     const displayedResult = selectedQueueItem ? selectedQueueItem.result ?? null : (isTranscribing ? activeResult : null);
     const displayedResultHasTranslation = Boolean(displayedResult?.original && displayedResult?.english);
 
@@ -354,9 +395,8 @@ export default function App() {
 
                     {/* Start / Stop button */}
                     <div className="p-5 border-t border-surface-800/30">
-                        <button onClick={() => { setShowModels(false); setShowSettings((value) => showModels ? true : !value); }} className="btn-ghost w-full justify-center mb-3" aria-pressed={showSettings}>
-                            {showSettings ? <ArrowLeft className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
-                            {showSettings ? "Back to transcription" : "Settings"}
+                        <button onClick={() => { setShowModels(false); setShowLibrary(false); setShowSettings(true); }} className="btn-ghost w-full justify-center mb-3" aria-pressed={showSettings}>
+                            <Settings className="w-4 h-4" /> Settings
                         </button>
                         {isTranscribing ? (
                             <button
@@ -396,10 +436,12 @@ export default function App() {
                     </div>
                 </aside>
 
-                {showModels ? (
+                {showLibrary ? (
+                    <LibraryPage items={libraryItems} loading={libraryLoading} error={libraryError} onBack={() => setShowLibrary(false)} command={updateCommand} onRefresh={refreshLibrary} onQueue={async (item) => { if (!item.audio_path || !item.audio_available) throw new Error("Relink the recording before adding it to the queue."); const metadata = await invoke<{ size: number }>("get_file_metadata", { path: item.audio_path }); addToQueue([{ path: item.audio_path, size: metadata.size, libraryId: item.id, fileName: item.audio_name || item.name }]); }} />
+                ) : showModels ? (
                     <ModelsPage models={models} storage={modelStorage} currentModel={currentModel} isTranscribing={isTranscribing} isModelLoading={isModelLoading} download={modelDownload} downloadError={modelDownloadError} onBack={() => setShowModels(false)} onRefresh={getModelStorage} onDownload={downloadModel} onCancelDownload={cancelModelDownload} onUse={loadModel} onRemove={deleteModel} onRemoveAll={deleteAllModels} />
                 ) : showSettings ? (
-                    <SettingsPage logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} updateCommand={updateCommand} updateBlocked={isTranscribing || isModelLoading || hasUnsaved(queue)} />
+                    <SettingsPage onBack={() => setShowSettings(false)} logs={backendLogs} isBackendReady={isBackendReady} isUsingMockBackend={isUsingMockBackend} error={error} updateCommand={updateCommand} updateBlocked={isTranscribing || isModelLoading || hasUnsaved(queue)} />
                 ) : (<>
                 {/* ═══════════════ MAIN CONTENT ═══════════════ */}
                 <main className="flex-1 flex flex-col min-w-0 min-h-0 p-5 gap-4 overflow-y-auto">
@@ -419,6 +461,10 @@ export default function App() {
                         queue={queue}
                         onRemove={handleRemoveFromQueue}
                         onRun={handleRunFile}
+                        onListen={setListeningId}
+                        onBatchExport={() => setShowBatchExport(true)}
+                        onSaveLibrary={(id) => setLibrarySaveIds([id])}
+                        onBatchSaveLibrary={() => setLibrarySaveIds(queue.filter((item) => item.status === "completed").map((item) => item.id))}
                         canRun={isBackendReady && !isTranscribing && !isModelLoading && !isStarting && Boolean(modelStorage) && !(currentModel?.endsWith(".en") && selectedLanguage !== "en") && !(selectedTask === "translate" && selectedModelInfo?.translation_support === false)}
                         onReorder={reorderQueue}
                         currentModel={currentModel}
@@ -452,15 +498,6 @@ export default function App() {
                         elapsedTime={elapsedTime}
                     />
 
-                    <div className="mt-4">
-                        <ExportPanel
-                            result={displayedResult}
-                            selectedTranscriptView={selectedTranscriptView}
-                            showTranscriptViewSelector={displayedResultHasTranslation}
-                            onSaved={(view) => { if (selectedQueueItem?.result === displayedResult) markSaved(selectedQueueItem.id, view); }}
-                        />
-                    </div>
-
                     <button onClick={() => { setShowSettings(false); setShowModels(true); }} className="card group mt-4 flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-accent-500/40 hover:bg-surface-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">
                         <HardDrive className="h-4 w-4 shrink-0 text-accent-400" />
                         <span className="min-w-0 flex-1">
@@ -470,9 +507,34 @@ export default function App() {
                         <ArrowRight className="h-4 w-4 shrink-0 text-surface-500 transition-colors group-hover:text-accent-400" aria-hidden="true" />
                     </button>
 
+                    <button onClick={() => { setShowSettings(false); setShowModels(false); setShowLibrary(true); }} className="card group mt-4 flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-accent-500/40 hover:bg-surface-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400">
+                        <LibraryBig className="h-4 w-4 shrink-0 text-accent-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-semibold uppercase tracking-wider text-surface-300">Library</span><span className="mt-1 block text-xs text-surface-500">Saved recordings and transcripts</span></span><ArrowRight className="h-4 w-4 shrink-0 text-surface-500 group-hover:text-accent-400" aria-hidden="true" />
+                    </button>
+
+                    <div className="mt-4">
+                        <ExportPanel result={displayedResult} selectedTranscriptView={selectedTranscriptView} showTranscriptViewSelector={displayedResultHasTranslation} onSaved={(view) => { if (selectedQueueItem?.result === displayedResult) markSaved(selectedQueueItem.id, view); }} />
+                    </div>
+
                 </aside>
                 </>)}
             </div>
+
+            <SaveLibraryDialog open={librarySaveIds !== null} onClose={() => setLibrarySaveIds(null)} items={queue.filter((item) => librarySaveIds?.includes(item.id))} command={updateCommand} onSaved={(queueItem, item, includedTranscript) => { linkQueueToLibrary(queueItem.id, item.id, includedTranscript ? queueItem.result : undefined); void refreshLibrary(); }} />
+            <BatchExportDialog open={showBatchExport} onClose={() => setShowBatchExport(false)} items={queue} onSaved={(id, view, result) => { if (queueForClose.current.find((item) => item.id === id)?.result === result) markSaved(id, view); }} />
+
+            <Dialog.Root open={!!listeningItem} onOpenChange={(open) => { if (!open) setListeningId(null); }}>
+                <Dialog.Portal>
+                    <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" />
+                    <Dialog.Content className="fixed left-1/2 top-1/2 z-[71] max-h-[calc(100vh-32px)] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-surface-700/70 bg-surface-900 p-6 shadow-2xl focus:outline-none">
+                        <div className="flex items-center justify-between gap-4">
+                            <Dialog.Title className="text-base font-semibold text-surface-100">Listen to recording</Dialog.Title>
+                            <Dialog.Close asChild><button aria-label="Close player" className="rounded-lg p-1.5 text-surface-400 hover:bg-surface-800 hover:text-surface-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-400"><X className="h-4 w-4" /></button></Dialog.Close>
+                        </div>
+                        <Dialog.Description className="sr-only">Play and navigate the selected recording.</Dialog.Description>
+                        {listeningItem && <AudioPlayer key={listeningItem.id} item={listeningItem} />}
+                    </Dialog.Content>
+                </Dialog.Portal>
+            </Dialog.Root>
 
             <Dialog.Root open={pendingModelDownload !== null} onOpenChange={(open) => { if (!open) setPendingModelDownload(null); }}>
                 <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm" /><Dialog.Content className="fixed left-1/2 top-1/2 z-[71] w-[min(440px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-surface-700/70 bg-surface-900 p-6 shadow-2xl focus:outline-none"><Dialog.Title className="text-base font-semibold text-surface-100">Download model?</Dialog.Title><Dialog.Description className="mt-3 text-sm leading-relaxed text-surface-400">{models.find((m) => m.name === pendingModelDownload)?.display_name || pendingModelDownload} isn’t downloaded yet. Download it before using it for transcription. You can see download progress in Manage models.</Dialog.Description><div className="mt-6 flex justify-end gap-3"><Dialog.Close asChild><button className="btn-ghost text-sm">Cancel</button></Dialog.Close><button className="btn-primary text-sm" onClick={() => { if (pendingModelDownload) void loadModel(pendingModelDownload); setPendingModelDownload(null); setShowModels(true); setShowSettings(false); }}>Download and use</button></div></Dialog.Content></Dialog.Portal>

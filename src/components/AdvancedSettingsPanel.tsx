@@ -24,14 +24,21 @@ function Toggle({
     checked,
     onChange,
     disabled,
+    label,
 }: {
     checked: boolean;
     onChange: (val: boolean) => void;
     disabled?: boolean;
+    label: string;
 }) {
     return (
         <button
             onClick={() => !disabled && onChange(!checked)}
+            type="button"
+            role="switch"
+            aria-label={label}
+            aria-checked={checked}
+            disabled={disabled}
             className={`
         relative w-9 h-5 rounded-full transition-all duration-200 shrink-0
         ${checked ? "bg-accent-500" : "bg-surface-700"}
@@ -88,12 +95,7 @@ function SliderRow({
                 onChange={(e) => onChange(parseFloat(e.target.value))}
                 aria-label={label}
                 aria-describedby={label === "Threads" ? "threads-help" : undefined}
-                className="w-full h-1.5 bg-surface-700 rounded-full appearance-none cursor-pointer
-                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
-                   [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
-                   [&::-webkit-slider-thumb]:bg-accent-400 [&::-webkit-slider-thumb]:shadow-md
-                   [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
-                   [&::-webkit-slider-thumb]:hover:bg-accent-300 [&::-webkit-slider-thumb]:hover:scale-110"
+                className="range-control w-full"
             />
         </div>
     );
@@ -124,7 +126,7 @@ function ToggleRow({
                     )}
                 </div>
             </div>
-            <Toggle checked={checked} onChange={onChange} />
+            <Toggle checked={checked} onChange={onChange} label={label} />
         </div>
     );
 }

@@ -7,7 +7,7 @@
     },
     "package": {
         "productName": "Wordvale",
-        "version": "0.1.4"
+        "version": "0.1.5"
     },
     "tauri": {
         "allowlist": {
@@ -41,6 +41,10 @@
             },
             "path": {
                 "all": true
+            },
+            "protocol": {
+                "asset": true,
+                "assetScope": []
             },
             "process": {
                 "all": true

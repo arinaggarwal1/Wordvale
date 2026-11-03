@@ -36,6 +36,7 @@ import imageio_ffmpeg
 
 from model_registry import get_all_models, get_model_info, get_model_names, MODEL_REGISTRY
 from updater import AppUpdater
+from library import Library
 
 # Shared user data directory
 APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/Wordvale")
@@ -243,6 +244,8 @@ class WhisperServer:
         self._download_cancel = threading.Event()
         self._ffmpeg_path = self._resolve_ffmpeg_path()
         self._updater = AppUpdater()
+        self._library = Library(APP_SUPPORT_DIR)
+        self._library_lock = threading.Lock()
 
     def _send_response(self, response: Dict[str, Any]) -> None:
         """Send a JSON response line to stdout."""
@@ -917,6 +920,25 @@ class WhisperServer:
             elif cmd == "transcribe_file":
                 result = self._transcribe_file(params)
 
+            elif cmd == "library_list":
+                result = {"status": "ok", "items": self._library.list()}
+
+            elif cmd == "library_create":
+                result = {"status": "ok", "item": self._library.create(params.get("name"), params.get("audio_path"), params.get("audio_mode"), params.get("transcript"))}
+
+            elif cmd == "library_rename":
+                result = {"status": "ok", "item": self._library.rename(params.get("id"), params.get("name"))}
+
+            elif cmd == "library_set_transcript":
+                result = {"status": "ok", "item": self._library.set_transcript(params.get("id"), params.get("transcript"))}
+
+            elif cmd == "library_set_audio":
+                result = {"status": "ok", "item": self._library.set_audio(params.get("id"), params.get("audio_path"), params.get("audio_mode"))}
+
+            elif cmd == "library_delete":
+                self._library.delete(params.get("id"))
+                result = {"status": "ok"}
+
             elif cmd == "update_status":
                 result = {"status": "ok", "update": self._updater.snapshot()}
 
@@ -984,7 +1006,13 @@ class WhisperServer:
                     })
                     continue
 
-                if command.get("command") == "update_check":
+                if command.get("command", "").startswith("library_"):
+                    def run_library(request):
+                        with self._library_lock:
+                            response = self._handle_command(request)
+                        self._send_response(response)
+                    threading.Thread(target=run_library, args=(command,), daemon=True).start()
+                elif command.get("command") == "update_check":
                     def run_update_check(request):
                         self._send_response(self._handle_command(request))
                     threading.Thread(target=run_update_check, args=(command,), daemon=True).start()

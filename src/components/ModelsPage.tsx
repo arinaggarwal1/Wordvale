@@ -52,7 +52,7 @@ export default function ModelsPage({ models, storage, currentModel, isTranscribi
     }
     return <main className="flex-1 min-w-0 min-h-0 overflow-y-auto bg-surface-950 p-6 lg:p-8">
         <div className="mx-auto max-w-6xl">
-            <button onClick={onBack} className="btn-ghost text-xs mb-6"><ArrowLeft className="h-4 w-4" /> Back to transcription</button>
+            <button onClick={onBack} className="page-back"><ArrowLeft className="h-4 w-4" /> Back to transcription</button>
             <div className="flex flex-wrap items-end justify-between gap-5 border-b border-surface-800/70 pb-6">
                 <div><p className="text-[10px] uppercase tracking-[0.2em] font-semibold text-accent-400 mb-2">Your transcription toolkit</p><h2 className="text-3xl font-bold text-surface-100">Models</h2><p className="mt-2 max-w-xl text-sm leading-relaxed text-surface-400">Choose the balance of speed, accuracy, and storage that fits your recording. Downloaded models work offline.</p></div>
                 <div className="rounded-xl border border-surface-700/50 bg-surface-900/70 px-5 py-3 min-w-[165px]"><p className="text-[10px] uppercase tracking-wider text-surface-500">Local storage</p><p className="mt-1 text-lg font-semibold text-surface-100">{storage ? size(storage.total_size_mb) : "—"}</p><p className="text-xs text-surface-400">{storage ? `${storage.downloaded_count} downloaded` : "Loading…"}</p></div>
@@ -60,10 +60,10 @@ export default function ModelsPage({ models, storage, currentModel, isTranscribi
             <div className="mt-6 grid gap-3 md:grid-cols-4 rounded-xl border border-accent-500/15 bg-accent-500/5 p-4 text-xs leading-relaxed text-surface-400">
                 <p><strong className="text-surface-200">Tiny</strong><br />Quick drafts and testing</p><p><strong className="text-surface-200">Small</strong><br />A multilingual starting point</p><p><strong className="text-surface-200">Large v3 Turbo</strong><br />Faster, higher-quality transcription</p><p><strong className="text-surface-200">Large v3</strong><br />More resources, stronger accuracy</p>
             </div>
-            <div className="mt-4 grid items-center gap-3 xl:grid-cols-3">
+            <div className="mt-4 grid items-center gap-3 xl:grid-cols-[minmax(150px,1fr)_minmax(200px,1.2fr)_auto]">
                 <label className="relative block w-full sm:w-64"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-500" /><span className="sr-only">Search models</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models" className="w-full rounded-lg border border-surface-700/60 bg-surface-900 px-9 py-2.5 text-sm text-surface-100 placeholder:text-surface-500 focus:border-accent-500 focus:outline-none" /></label>
                 <p className="text-center text-xs leading-relaxed text-surface-500">Accuracy, language detection, and output script can vary by recording and model.</p>
-                <div className="flex flex-wrap justify-center gap-1 rounded-lg bg-surface-900 p-1 xl:justify-self-end" aria-label="Filter models">{(["All", "Downloaded", "Multilingual", "English only"] as Filter[]).map((option) => <button key={option} onClick={() => setFilter(option)} aria-pressed={filter === option} className={`rounded-md px-3 py-2 text-xs transition-colors ${filter === option ? "bg-surface-700 text-surface-100" : "text-surface-400 hover:text-surface-100"}`}>{option}</button>)}</div>
+                <div className="flex flex-wrap justify-center gap-1 rounded-lg bg-surface-900 p-1 xl:flex-nowrap xl:justify-self-end" aria-label="Filter models">{(["All", "Downloaded", "Multilingual", "English only"] as Filter[]).map((option) => <button key={option} onClick={() => setFilter(option)} aria-pressed={filter === option} className={`whitespace-nowrap rounded-md px-3 py-2 text-xs transition-colors ${filter === option ? "bg-surface-700 text-surface-100" : "text-surface-400 hover:text-surface-100"}`}>{option}</button>)}</div>
             </div>
             {isTranscribing && <p className="mt-4 text-xs text-warning-400">Finish the current queue before changing or removing models.</p>}
             {localError && <p role="alert" className="mt-4 text-sm text-danger-400">{localError}</p>}

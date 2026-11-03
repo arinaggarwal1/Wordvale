@@ -10,6 +10,7 @@
 )]
 
 use std::{fs, io::Write, path::Path, process::Command};
+use tauri::Manager;
 
 #[derive(serde::Serialize)]
 struct FileMetadata {
@@ -24,6 +25,16 @@ fn get_file_metadata(path: String) -> Result<FileMetadata, String> {
         size: metadata.len(),
         is_file: metadata.is_file(),
     })
+}
+
+#[tauri::command]
+fn allow_audio_playback(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let path = fs::canonicalize(path).map_err(|e| e.to_string())?;
+    if !path.is_file() {
+        return Err("Recording is not a file".into());
+    }
+    app.asset_protocol_scope().allow_file(&path).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -55,9 +66,14 @@ fn save_transcript_copy(directory: String, filename: String, content: String) ->
     if !dir.is_dir() || Path::new(&filename).file_name().and_then(|v| v.to_str()) != Some(filename.as_str()) {
         return Err("Invalid output folder or file name".into());
     }
-    let stem = filename.strip_suffix(".txt").unwrap_or(&filename);
+    let file = Path::new(&filename);
+    let extension = file.extension().and_then(|v| v.to_str()).unwrap_or("");
+    if !["txt", "srt", "json", "ass"].contains(&extension) {
+        return Err("Unsupported transcript format".into());
+    }
+    let stem = file.file_stem().and_then(|v| v.to_str()).filter(|v| !v.is_empty()).ok_or("Invalid file name")?;
     for index in 0..10000 {
-        let name = if index == 0 { format!("{stem}.txt") } else { format!("{stem} ({index}).txt") };
+        let name = if index == 0 { format!("{stem}.{extension}") } else { format!("{stem} ({index}).{extension}") };
         let path = dir.join(name);
         match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(mut file) => {
@@ -78,6 +94,27 @@ fn save_transcript_copy(directory: String, filename: String, content: String) ->
 #[tauri::command]
 fn app_process_id() -> u32 { std::process::id() }
 
+#[cfg(test)]
+mod tests {
+    use super::save_transcript_copy;
+    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+
+    #[test]
+    fn transcript_exports_preserve_existing_files_and_extensions() {
+        let folder = std::env::temp_dir().join(format!("wordvale-export-test-{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir(&folder).unwrap();
+        let dir = folder.to_string_lossy().into_owned();
+        let first = save_transcript_copy(dir.clone(), "talk.srt".into(), "first".into()).unwrap();
+        let second = save_transcript_copy(dir.clone(), "talk.srt".into(), "second".into()).unwrap();
+        assert!(second.ends_with("talk (1).srt"));
+        assert_eq!(fs::read_to_string(first).unwrap(), "first");
+        assert_eq!(fs::read_to_string(second).unwrap(), "second");
+        assert!(save_transcript_copy(dir.clone(), "../escape.txt".into(), "bad".into()).is_err());
+        assert!(save_transcript_copy(dir, "bad.exe".into(), "bad".into()).is_err());
+        fs::remove_dir_all(folder).unwrap();
+    }
+}
+
 fn main() {
     // An older updater may have relaunched us with its PyInstaller extraction
     // state. Never pass that stale state to a new backend sidecar.
@@ -87,7 +124,7 @@ fn main() {
         }
     }
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_file_metadata, open_in_finder, save_transcript_copy, app_process_id])
+        .invoke_handler(tauri::generate_handler![get_file_metadata, allow_audio_playback, open_in_finder, save_transcript_copy, app_process_id])
         .run(tauri::generate_context!())
         .expect("error while running Wordvale");
 }
