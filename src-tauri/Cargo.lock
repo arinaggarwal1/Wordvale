@@ -3657,7 +3657,7 @@ dependencies = [
 
 [[package]]
 name = "wordvale"
-version = "0.2.0-alpha"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
