@@ -25,6 +25,8 @@ class FakeGitHub:
         self.calls = []
         self.create_race = None
         self.api_failure = None
+        self.list_failure = None
+        self.list_pages = None
 
     def __call__(self, *args, check=True):
         self.calls.append(args)
@@ -32,17 +34,27 @@ class FakeGitHub:
         if args[0] == "api":
             if self.api_failure:
                 code, error = 1, self.api_failure
-            elif self.current is None:
-                code, error = 1, "gh: Not Found (HTTP 404)"
+            elif "/releases/tags/" in args[1]:
+                if self.current is None or self.current.get("draft"):
+                    code, error = 1, "gh: Not Found (HTTP 404)"
+                else:
+                    output = json.dumps(self.current)
+            elif args[1].endswith("/releases?per_page=100"):
+                assert "--paginate" in args and "--slurp" in args
+                if self.list_failure:
+                    code, error = 1, self.list_failure
+                else:
+                    pages = self.list_pages if self.list_pages is not None else [[self.current] if self.current else []]
+                    output = json.dumps(pages)
             else:
-                output = json.dumps(self.current)
+                raise AssertionError(args)
         elif args[:2] == ("release", "create"):
             if self.create_race:
                 self.current, self.contents = copy.deepcopy(self.create_race)
                 code, error = 1, "release already exists"
             else:
                 body = Path(args[args.index("--notes-file") + 1]).read_text()
-                self.current = {"draft": True, "prerelease": False, "body": body, "assets": []}
+                self.current = {"tag_name": args[2], "draft": True, "prerelease": False, "body": body, "assets": []}
         elif args[:2] == ("release", "upload"):
             self.assert_no_clobber(args)
             path = Path(args[3])
@@ -76,7 +88,7 @@ def existing_release(draft=False, complete=True, managed=False):
     if complete:
         for name, data in list(contents.items()):
             contents[name + ".sha256"] = f"{hashlib.sha256(data).hexdigest()}  {name}\n".encode()
-    return {"draft": draft, "body": release_artifacts.WORKFLOW_MARKER if managed else "Manual release notes",
+    return {"tag_name": "v0.4.0-alpha.1", "draft": draft, "body": release_artifacts.WORKFLOW_MARKER if managed else "Manual release notes",
             "assets": [asset(name, data) for name, data in contents.items()]}, contents
 
 
@@ -109,7 +121,7 @@ class ReleaseArtifactsTests(unittest.TestCase):
                 fake = FakeGitHub(current, contents)
                 self.publish(fake)
                 self.assertEqual(fake.current, current)
-                self.assertEqual(len(fake.calls), 1)
+                self.assertEqual(len(fake.calls), 2 if draft else 1)
 
     def test_partial_existing_release_keeps_binaries_and_hashes_remote_bytes(self):
         for draft in (True, False):
@@ -174,6 +186,34 @@ class ReleaseArtifactsTests(unittest.TestCase):
                     release_artifacts.inspect("owner/repo", "v0.4.0-alpha.1", output)
                 self.assertIn("build_required=false", output.read_text())
                 self.assertIn(f"publish_required={str(managed).lower()}", output.read_text())
+
+    def test_tag_404_finds_manual_draft_on_later_release_page_and_skips_it(self):
+        current, contents = existing_release(draft=True)
+        fake = FakeGitHub(current, contents)
+        other = dict(current, tag_name="v0.3.0-alpha.1")
+        fake.list_pages = [[other], [current]]
+        output = self.root / "outputs.txt"
+        with patch.object(release_artifacts, "gh", fake), contextlib.redirect_stdout(io.StringIO()):
+            release_artifacts.inspect("owner/repo", "v0.4.0-alpha.1", output)
+        self.assertEqual(output.read_text(), "build_required=false\npublish_required=false\n")
+        self.publish(fake)
+        self.assertEqual(fake.current, current)
+        self.assertTrue(all(call[0] == "api" for call in fake.calls))
+
+    def test_tag_404_with_no_matching_release_in_list_returns_none(self):
+        fake = FakeGitHub()
+        other, _ = existing_release(draft=True)
+        other["tag_name"] = "v0.3.0-alpha.1"
+        fake.list_pages = [[other], []]
+        with patch.object(release_artifacts, "gh", fake):
+            self.assertIsNone(release_artifacts.release("owner/repo", "v0.4.0-alpha.1"))
+
+    def test_tag_404_then_list_forbidden_fails_without_creating_release(self):
+        fake = FakeGitHub()
+        fake.list_failure = "gh: Forbidden (HTTP 403)"
+        with self.assertRaisesRegex(RuntimeError, "403"):
+            self.publish(fake)
+        self.assertTrue(all(call[0] == "api" for call in fake.calls))
 
 
 if __name__ == "__main__":

@@ -32,7 +32,11 @@ def release(repo, tag):
     result = gh("api", f"repos/{repo}/releases/tags/{quote(tag, safe='')}", check=False)
     if result.returncode:
         if "(HTTP 404)" in result.stderr:
-            return None
+            # The tag endpoint omits drafts. Authenticated release listings
+            # include them; inspect every page before treating a tag as new.
+            listing = gh("api", f"repos/{repo}/releases?per_page=100", "--paginate", "--slurp")
+            return next((item for page in json.loads(listing.stdout) for item in page
+                         if item.get("tag_name") == tag), None)
         raise RuntimeError(result.stderr.strip() or "Could not inspect GitHub release")
     return json.loads(result.stdout)
 
