@@ -1,0 +1,7 @@
+.tools/
+Vendor/
+build/
+dist/
+*.xcuserstate
+xcuserdata/
+.DS_Store

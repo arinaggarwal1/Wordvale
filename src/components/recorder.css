@@ -108,7 +108,7 @@
 .recorder-source-copy span { font-size: 11px; color: rgb(var(--surface-400)); }
 .recorder-source-status { opacity: .8; }
 .recorder-actions { margin-top: 16px; }
-.recorder-active-actions { display: grid; grid-template-columns: repeat(2, 112px); justify-content: center; align-items: start; gap: 44px; }
+.recorder-active-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-items: center; align-items: start; gap: 12px; }
 .recorder-control { display: inline-flex; width: 112px; flex-direction: column; align-items: center; gap: 8px; color: rgb(var(--surface-100)); font-size: 12px; font-weight: 600; line-height: 18px; }
 .recorder-control > span:last-child { min-height: 18px; white-space: nowrap; }
 .recorder-control-disc { display: grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; background: rgb(var(--theme-sidebar)); color: rgb(var(--accent-400)); transition: transform 180ms ease, box-shadow 180ms ease; }

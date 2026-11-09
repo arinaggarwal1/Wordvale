@@ -22,6 +22,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -33,6 +34,7 @@ import wave
 from typing import Any, Dict, List, Optional
 
 import imageio_ffmpeg
+import certifi
 
 from model_registry import get_all_models, get_model_info, get_model_names, MODEL_REGISTRY
 from updater import AppUpdater
@@ -321,7 +323,9 @@ class WhisperServer:
             with tempfile.NamedTemporaryFile(prefix=".whisper-download-", dir=MODELS_DIR, delete=False) as output:
                 temp_path = output.name
                 self._send_response({"type": "model_download", "data": {"model": model_name, "downloaded": 0, "total": None}})
-                with urllib.request.urlopen(url, timeout=30) as response:
+                # Use the bundled CA roots, not the build machine’s OpenSSL paths.
+                context = ssl.create_default_context(cafile=certifi.where())
+                with urllib.request.urlopen(url, timeout=30, context=context) as response:
                     header = response.headers.get("Content-Length")
                     total = int(header) if header and header.isdigit() and int(header) > 0 else None
                     downloaded = 0

@@ -130,7 +130,15 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
             return
         }
         if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--request-system" {
-            print(CGRequestScreenCaptureAccess() ? "granted" : "unavailable")
+            guard #available(macOS 13.0, *) else { print("unavailable"); return }
+            // Ask through the same API and helper identity that start() uses.
+            // CoreGraphics preflight may disagree with ScreenCaptureKit access.
+            do {
+                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                print("granted")
+            } catch {
+                print("unavailable")
+            }
             return
         }
         guard #available(macOS 13.0, *), CommandLine.arguments.count == 4 else { print("ERROR unsupported macOS or arguments"); return }

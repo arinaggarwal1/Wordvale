@@ -75,8 +75,9 @@ function FlowingMark({ energy, active }: { energy: number; active: boolean }) {
 export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTranscribe, transcriptionSummary, transcribeUnavailable, onLibrary, onRecordingChange, visible = true }: Props) {
   const [name, setName] = useState(() => `Meeting · ${new Date().toLocaleDateString()}`);
   const [mic, setMic] = useState(true), [system, setSystem] = useState(false);
+  const systemVerified = useRef(false);
+  const permissionCheckRunning = useRef(false);
   const [permissions, setPermissions] = useState<Permissions | null>(null);
-  const [systemRequested, setSystemRequested] = useState(false);
   const [micMuted, setMicMuted] = useState(false), [systemMuted, setSystemMuted] = useState(false);
   const [recording, setRecording] = useState(false), [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -110,13 +111,17 @@ export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTran
   useEffect(() => { if (!visible) preview.current?.pause(); }, [visible]);
 
   const refreshPermissions = useCallback(async () => {
-    if (!("__TAURI__" in window)) return;
+    if (!("__TAURI__" in window) || permissionCheckRunning.current) return;
+    permissionCheckRunning.current = true;
     try {
       const next = await invoke<Permissions>("recording_permissions");
+      // A successful ScreenCaptureKit check is stronger evidence than preflight.
+      if (systemVerified.current) next.system = true;
       setPermissions(next);
       if (next.mic === "denied") setMic(false);
       if (!next.system) setSystem(false);
     } catch { /* Recording can still be attempted if the check is unavailable. */ }
+    finally { permissionCheckRunning.current = false; }
   }, []);
   useEffect(() => {
     if (recording) return;
@@ -124,7 +129,7 @@ export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTran
     const onFocus = () => { void refreshPermissions(); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [recording, refreshPermissions]);
+  }, [recording, visible, refreshPermissions]);
 
   useEffect(() => {
     if (visible && !recording && "__TAURI__" in window) void invoke<RecordingDraftSummary[]>("recording_recoverable").then(setRecoverable).catch(() => {});
@@ -217,7 +222,7 @@ export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTran
       elapsed.current = 0; segmentStart.current = performance.now(); setPaused(false);
       setMicMuted(false); setSystemMuted(false); setLevels({ mic: 0, system: 0 });
       setRecording(true); onRecordingChange(true);
-    } catch (failure) { setError(String(failure)); void refreshPermissions(); }
+    } catch (failure) { systemVerified.current = false; setError(String(failure)); void refreshPermissions(); }
     finally { setBusy(false); }
   }
   async function stop() {
@@ -258,9 +263,13 @@ export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTran
     setBusy(true); setError("");
     try {
       const granted = await invoke<boolean>("recording_request_system");
-      setSystemRequested(true);
-      await refreshPermissions();
-      if (granted) setSystem(true);
+      systemVerified.current = granted;
+      setPermissions(previous => ({ mic: previous?.mic ?? "prompt", system: granted }));
+      setSystem(granted);
+      if (!granted) {
+        setError("Computer audio access is still unavailable for this build. If System Settings shows two Wordvale entries, enable the one for the build you are running (the plain executable for a development build). Quit and reopen Wordvale after changing access.");
+        openPermissionSettings("system");
+      }
     } catch (failure) { setError(`Could not request computer audio access: ${String(failure)}`); }
     finally { setBusy(false); }
   }
@@ -271,7 +280,7 @@ export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTran
   const micUnavailable = !recording && permissions?.mic === "denied";
   const systemUnavailable = !recording && permissions !== null && !permissions.system;
   const micHelp = "Microphone permission is denied. Enable Wordvale in System Settings → Privacy & Security → Microphone.";
-  const systemHelp = "Computer audio access is not enabled. Select this card to allow it, or enable Wordvale in System Settings → Privacy & Security → Screen & System Audio Recording.";
+  const systemHelp = "Select this card to check and allow computer audio access. If macOS lists two Wordvale entries, the development executable and installed app have separate permissions. Enable the build you are using in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen it.";
 
   const energy = recording && !paused ? Math.max(mic && !micMuted ? levels.mic : 0, system && !systemMuted ? levels.system * 0.85 : 0) : 0;
   const time = `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -289,7 +298,7 @@ export default function RecorderPage({ draftInUse, onDeleteDraft, onSave, onTran
       {!savedPath && !saving && <><label className="recorder-name">Meeting name<input value={name} onChange={event => setName(event.target.value)} disabled={recording} /></label>
       <div className="recorder-sources">
         <div className={`recorder-source-wrap${micUnavailable ? " permission-unavailable" : ""}`}><button type="button" className="recorder-source" aria-label={micUnavailable ? "Microphone permission denied. Open settings" : "Microphone"} aria-pressed={micUnavailable ? undefined : mic && !(recording && micMuted)} aria-describedby={micUnavailable ? "recorder-mic-help" : undefined} disabled={busy || (recording && !mic)} onClick={() => micUnavailable ? openPermissionSettings("mic") : recording ? void mute("mic") : setMic(!mic)}><Mic size={20}/><span className="recorder-source-copy"><strong>Microphone</strong><span>{micUnavailable ? "Permission denied · Fix" : recording && !mic ? "Not included" : recording && micMuted ? "Muted" : mic ? "On" : "Off"}</span></span>{mic && !(recording && micMuted) ? <Volume2 className="recorder-source-status" size={17}/> : <VolumeX className="recorder-source-status" size={17}/>}</button>{micUnavailable && <span id="recorder-mic-help" className="recorder-permission-tooltip" role="tooltip">{micHelp}</span>}</div>
-        <div className={`recorder-source-wrap${systemUnavailable ? " permission-unavailable" : ""}`}><button type="button" className="recorder-source" aria-label={systemUnavailable ? "Computer audio permission needed. Allow access" : "Computer audio"} aria-pressed={systemUnavailable ? undefined : system && !(recording && systemMuted)} aria-describedby={systemUnavailable ? "recorder-system-help" : undefined} disabled={busy || (recording && !system)} onClick={() => systemUnavailable ? systemRequested ? openPermissionSettings("system") : void requestSystem() : recording ? void mute("system") : setSystem(!system)}><MonitorSpeaker size={20}/><span className="recorder-source-copy"><strong>Computer audio</strong><span>{systemUnavailable ? "Permission needed · Fix" : recording && !system ? "Not included" : recording && systemMuted ? "Muted" : system ? "On" : "Off"}</span></span>{system && !(recording && systemMuted) ? <Volume2 className="recorder-source-status" size={17}/> : <VolumeX className="recorder-source-status" size={17}/>}</button>{systemUnavailable && <span id="recorder-system-help" className="recorder-permission-tooltip" role="tooltip">{systemHelp}</span>}</div>
+        <div className={`recorder-source-wrap${systemUnavailable ? " permission-unavailable" : ""}`}><button type="button" className="recorder-source" aria-label={systemUnavailable ? "Computer audio permission needed. Allow access" : "Computer audio"} aria-pressed={systemUnavailable ? undefined : system && !(recording && systemMuted)} aria-describedby={systemUnavailable ? "recorder-system-help" : undefined} disabled={busy || (recording && !system)} onClick={() => systemUnavailable ? void requestSystem() : recording ? void mute("system") : setSystem(!system)}><MonitorSpeaker size={20}/><span className="recorder-source-copy"><strong>Computer audio</strong><span>{systemUnavailable ? "Permission needed · Fix" : recording && !system ? "Not included" : recording && systemMuted ? "Muted" : system ? "On" : "Off"}</span></span>{system && !(recording && systemMuted) ? <Volume2 className="recorder-source-status" size={17}/> : <VolumeX className="recorder-source-status" size={17}/>}</button>{systemUnavailable && <span id="recorder-system-help" className="recorder-permission-tooltip" role="tooltip">{systemHelp}</span>}</div>
       </div>
       </>}
       {error && !draftsOpen && <p className="recorder-error" role="alert">{error}</p>}

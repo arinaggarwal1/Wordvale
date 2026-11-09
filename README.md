@@ -4,7 +4,7 @@
 
 <p align="center"><a href="https://wordvale-seven.vercel.app">Website</a> · <a href="#get-started">Get started</a> · <a href="#what-you-can-do">Features</a> · <a href="#run-from-source">Run from source</a> · <a href="#github-releases">Releases</a> · <a href="https://buymeacoffee.com/Arin11a">Buy me a coffee</a></p>
 
-<p align="center"><a href="https://github.com/arinaggarwal1/Wordvale/releases/tag/v0.3.0-alpha.1"><strong>Download Wordvale 0.3.0-alpha.1 for macOS (Apple silicon)</strong></a></p>
+<p align="center"><a href="https://github.com/arinaggarwal1/Wordvale/releases/tag/v0.4.0-alpha.1"><strong>Download Wordvale 0.4.0-alpha.1 for macOS (Apple silicon)</strong></a></p>
 
 ---
 
@@ -29,9 +29,13 @@
 
 ## Get started
 
-Download the latest macOS DMG from the project's Releases page, open it, and drag Wordvale into Applications. The packaged build targets **Apple silicon** Macs. Open the app, sign in or create an account with email and password or Google, select a recording, and start transcription. Sign-in requires an internet connection. The local library is shared by accounts using the same Mac user profile; signing in does not isolate or sync its files.
+Download the latest macOS DMG from the project's Releases page, open it, and drag Wordvale into Applications. The packaged build requires **macOS 15 or later on Apple silicon**. It is ad-hoc signed and is not notarized. Open the app, sign in or create an account with email and password or Google, select a recording, and start transcription. Sign-in requires an internet connection. The local library is shared by accounts using the same Mac user profile; signing in does not isolate or sync its files.
 
 The first time you use a model, it needs an internet connection to download. Afterward, the model runs locally. Checking for app updates also uses the internet.
+
+## iPhone port
+
+Download the [iPhone IPA](https://github.com/arinaggarwal1/Wordvale/releases/download/v0.4.0-alpha.1/Wordvale-iOS.ipa). A native iOS 17+ port is available in [`ios/`](ios/README.md), built for iPhone including iPhone 15 Pro. It uses SwiftUI, AVFoundation, and Metal-backed Whisper for local recording, transcription, a persistent library, and exports. Build a sideloadable IPA with `ios/scripts/build-ipa.sh`; sign it during installation with Sideloadly or AltStore. See the [iPhone setup and sideload guide](ios/README.md) and [verification record](ios/VALIDATION.md).
 
 ## Run from source
 
@@ -385,7 +389,7 @@ Large v3 Turbo is intended for transcription and is not trained for speech trans
 
 ## Record meetings
 
-Open **Record** from the sidebar, choose Microphone, Computer audio, or both, and start recording. Each source can be muted independently, and recording can be paused and resumed. Stop to review and play back your recording. **Transcribe** starts this recording using your current settings; **Adjust transcription settings** in the recording actions menu adds it to the queue without starting. Saving to Library is optional, before or after transcription. Unsaved recordings appear in **Draft recordings** with their name and date. Choose **Open recording** to review completed audio; **Restore audio** is only shown for interrupted sessions that need their captured audio rebuilt. Draft row menus offer Rename, Show in Finder, and Delete draft. Deleting requires confirmation and is blocked for recordings in the queue or Library. Recording requires macOS 13 or later and the relevant macOS microphone or screen recording permissions.
+Open **Record** from the sidebar, choose Microphone, Computer audio, or both, and start recording. Each source can be muted independently, and recording can be paused and resumed. Stop to review and play back your recording. **Transcribe** starts this recording using your current settings; **Adjust transcription settings** in the recording actions menu adds it to the queue without starting. Saving to Library is optional, before or after transcription. Unsaved recordings appear in **Draft recordings** with their name and date. Choose **Open recording** to review completed audio; **Restore audio** is only shown for interrupted sessions that need their captured audio rebuilt. Draft row menus offer Rename, Show in Finder, and Delete draft. Deleting requires confirmation and is blocked for recordings in the queue or Library. This packaged release requires macOS 15 or later and the relevant macOS microphone or screen recording permissions.
 
 ## Library
 
@@ -399,18 +403,18 @@ Use **Add to queue** on a library recording to transcribe it again. A successful
 
 ## GitHub Releases
 
-The workflow at `.github/workflows/release-dmg.yml` builds an Apple silicon macOS DMG when a version tag is pushed. It publishes prerelease tags such as `v0.1.0-alpha` as GitHub prereleases. Set the same version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` before tagging.
+The workflow at `.github/workflows/release-dmg.yml` builds an Apple silicon macOS DMG and an unsigned iPhone IPA when a version tag is pushed, then attaches both assets and checksums. Alpha versions remain clearly labeled in their version and release notes, while being listed as Latest so the website and in-app updater agree. Keep `package.json`, its lockfile, the Tauri and Cargo versions, and the release tag aligned. The iOS marketing version uses the numeric version (for example, `0.4.0`) with a monotonically increasing build number in `ios/project.yml`.
 
 ```bash
-git tag v0.1.0-alpha
-git push origin v0.1.0-alpha
+git tag v0.4.0-alpha.1
+git push origin v0.4.0-alpha.1
 ```
 
 The release must include an asset named `Wordvale-macOS-arm64.dmg`. GitHub must report its `sha256:` digest and size in the release API; the app checks these before staging an update. The updater checks published stable releases and prereleases, orders semantic versions (including alpha, beta and release candidates), and ignores drafts. Version numbers in the package, Tauri configuration, Cargo manifest, and release tag must match.
 
 Wordvale checks for updates at startup and every six hours while open. A dismissible notice links to **Settings → Updates**; dismissal lasts for that release. In Settings, download an available update, then choose **Install and restart** after saving your transcripts and finishing active work. The updater supports the packaged Apple silicon app in a writable location, stages the verified app beside the existing bundle, and keeps the previous bundle in the staging folder for recovery. Development builds can check but cannot install updates. If replacement or relaunch fails, it attempts to restore the previous app.
 
-Install the first release containing the updater manually from its DMG; older versions cannot install updates themselves. The DMG and app are currently unsigned and unnotarized. The checksum verifies the artifact against GitHub’s release metadata; it is not an independent code-signing signature.
+Install the first release containing the updater manually from its DMG; older versions cannot install updates themselves. The app has a verified ad-hoc signature seal; it is not Developer ID–signed or notarized. The checksum verifies the artifact against GitHub’s release metadata; it is not an independent code-signing signature.
 
 ## Design Choices
 

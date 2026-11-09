@@ -1,6 +1,7 @@
 import io
 import os
 import pathlib
+import ssl
 import sys
 import tempfile
 import unittest
@@ -43,6 +44,17 @@ class ModelDownloadTest(unittest.TestCase):
         self.assertEqual(result["status"], "downloaded")
         self.assertEqual(pathlib.Path(self.temp.name, "ggml-tiny.bin").read_bytes(), self.content)
         self.assertEqual(len(os.listdir(self.temp.name)), 1)
+
+    def test_download_uses_bundled_roots_with_certificate_verification(self):
+        # Simulate a recipient with no usable system/OpenSSL certificate paths.
+        with patch.dict(os.environ, {"SSL_CERT_FILE": "/missing/cert.pem", "SSL_CERT_DIR": "/missing/certs"}):
+            with patch.object(module.urllib.request, "urlopen", return_value=FakeResponse(self.content)) as request:
+                result = self.server._download_model("tiny")
+        self.assertEqual(result["status"], "downloaded")
+        context = request.call_args.kwargs["context"]
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+        self.assertGreater(context.cert_store_stats()["x509_ca"], 0)
 
     def test_truncated_and_invalid_files_are_not_installed(self):
         for response in [FakeResponse(self.content, declared=len(self.content) + 1), FakeResponse(b"html" + b"x" * 2048)]:

@@ -91,6 +91,7 @@ python -m PyInstaller \
     --clean \
     --noconfirm \
     --onefile \
+    --collect-data certifi \
     --name whisper-backend \
     --distpath "$DIST_DIR" \
     --workpath "$BUILD_DIR" \

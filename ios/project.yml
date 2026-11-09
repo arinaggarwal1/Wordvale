@@ -1,0 +1,89 @@
+name: Wordvale
+options:
+  bundleIdPrefix: app.wordvale
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.2"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "2"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CLANG_ENABLE_MODULES: YES
+    CODE_SIGN_STYLE: Automatic
+  configs:
+    Release:
+      ENABLE_CODE_COVERAGE: NO
+      CLANG_ENABLE_CODE_COVERAGE: NO
+      GCC_GENERATE_TEST_COVERAGE_FILES: NO
+      GCC_INSTRUMENT_PROGRAM_FLOW_ARCS: NO
+targets:
+  Wordvale:
+    type: application
+    platform: iOS
+    sources:
+      - path: Wordvale
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.wordvale.ios
+        PRODUCT_NAME: Wordvale
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_FILE: Wordvale/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        ENABLE_BITCODE: NO
+    dependencies:
+      - framework: Vendor/whisper.xcframework
+        embed: true
+        codeSign: true
+      - sdk: AVFoundation.framework
+      - sdk: Metal.framework
+      - sdk: Accelerate.framework
+  WordvaleTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: WordvaleTests
+    dependencies:
+      - target: Wordvale
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.wordvale.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+  WordvaleUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: WordvaleUITests
+    dependencies:
+      - target: Wordvale
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.wordvale.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Wordvale:
+    build:
+      targets:
+        Wordvale: all
+        WordvaleTests: [test]
+        WordvaleUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - WordvaleTests
+        - WordvaleUITests
+    archive:
+      config: Release
